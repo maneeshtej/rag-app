@@ -1,3 +1,4 @@
+from database.pg_vectorstore import PGVectorStore
 from pipelines.ingestion_pipeline import IngestionPipeline
 from pipeline import MainPipeline
 from langchain_community.document_loaders import TextLoader
@@ -14,6 +15,8 @@ def main():
     print("  login         -> login as a user")
     print("  query         -> ask a question")
     print("  add           -> ingest a text file")
+    print("  list          -> list all the uploaded files")
+    print("  delete        -> delete a file with source")
     print("  exit          -> quit")
     print("_" * 100)
 
@@ -56,6 +59,14 @@ def main():
 
             print(results)
 
+        elif cmd.lower() == "list":
+            if current_user is None:
+                print("No user set. Run `create` first.\n")
+                continue
+
+            files = app.retriever.list_files(current_user)
+            print(files)
+
         elif cmd.lower() == "add":
             filepath = input("filepath: ")
 
@@ -71,6 +82,20 @@ def main():
             )
 
             print(chunks)
+
+        elif cmd.lower() == "delete":
+            if current_user is None:
+                print("No user set. Run `create` first.\n")
+                continue
+
+            source = input("source: ")
+            if not source or source == "":
+                print("Try again")
+                continue
+
+            output = app.retriever.delete_file(source)
+            print(output)
+                
 
         else:
             print("Try again")

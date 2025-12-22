@@ -25,9 +25,9 @@ def create_ingestion_app():
 def create_retrival_app(k:int = 5):
     embedder = create_embedder()
     conn = get_connection()
-    vectorstore = PGVectorStore(embedder=embedder, conn=conn)
+    vectorstore: PGVectorStore = PGVectorStore(embedder=embedder, conn=conn)
 
-    retriever = PGRetriever(vectorstore=vectorstore, embedder=embedder)
+    retriever: PGRetriever = PGRetriever(vectorstore=vectorstore, embedder=embedder)
 
     return(
         RetrievalPipeline(retriever=retriever)
@@ -36,7 +36,7 @@ def create_retrival_app(k:int = 5):
 
 
 def create_app():
-    app = MainPipeline(
+    app: MainPipeline = MainPipeline(
         ingestion=create_ingestion_app(),
         retriever=create_retrival_app()
         )

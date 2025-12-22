@@ -1,9 +1,10 @@
+from database.pg_vectorstore import PGVectorStore
 from models.user import User
 
 
 class PGRetriever:
     def __init__(self, vectorstore, embedder):
-        self.vectorstore = vectorstore
+        self.vectorstore: PGVectorStore = vectorstore
         self.embedder = embedder
 
     def retrieve(self, query:str, user:User, k:int = 5):
@@ -18,3 +19,9 @@ class PGRetriever:
             owner_id= user.id,
             min_access_level=user.access_level
         )
+    
+    def list_files(self, user: User):
+        return self.vectorstore.list_files(user=user)
+    
+    def delete_file(self, source:str):
+        return self.vectorstore.delete_file(source)
