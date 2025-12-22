@@ -33,6 +33,7 @@ wikipedia
 langgraph
 psycopg2
 pgvector
+langchain-ollama
 
 
 

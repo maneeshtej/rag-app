@@ -1,11 +1,21 @@
 from database.pg_vectorstore import PGVectorStore
 from pipelines.ingestion_pipeline import IngestionPipeline
 from pipeline import MainPipeline
-from langchain_community.document_loaders import TextLoader
+from langchain_community.document_loaders import TextLoader, PyPDFLoader, Docx2txtLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.messages import HumanMessage, AIMessage
 from services.user_service import create_user, user_login
 from bootstrap.bootstrap import create_app
 
+def create_loader(path: str):
+    if path.endswith(".txt"):
+        return TextLoader(path)
+    elif path.endswith(".pdf"):
+        return PyPDFLoader(path)
+    elif path.endswith(".docx"):
+        return Docx2txtLoader(path)
+    else:
+        raise ValueError("Unsupported file type")
 
 def main():
     print("_" * 100)
@@ -54,18 +64,43 @@ def main():
             current_user = user
 
         elif cmd.lower() == "query":
-            query = input("query: ")
-            results = app.retrieve(query, current_user)
-
-            print(results)
-
-        elif cmd.lower() == "list":
             if current_user is None:
-                print("No user set. Run `create` first.\n")
+                print("No user set. Run `login` or `create` first.\n")
                 continue
 
-            files = app.retriever.list_files(current_user)
-            print(files)
+            print("Entering chat mode. Type `quit` or `exit` to leave.\n")
+
+            chat_history = []  # List[HumanMessage | AIMessage]
+
+            while True:
+                query = input("you> ").strip()
+
+                if query.lower() in {"quit", "exit"}:
+                    print("Exiting chat mode.\n")
+                    break
+
+                answer = app.inference(
+                    query=query,
+                    user=current_user,
+                    chat_history=chat_history
+                )
+
+                print(f"assistant> {answer}\n")
+
+                chat_history.append(HumanMessage(content=query))
+                chat_history.append(AIMessage(content=answer))
+
+                if len(chat_history) > 10:  
+                    chat_history = chat_history[-10:]
+
+
+        elif cmd.lower() == "list":
+                    if current_user is None:
+                        print("No user set. Run `create` first.\n")
+                        continue
+
+                    files = app.retriever.list_files(current_user)
+                    print(files)        
 
         elif cmd.lower() == "add":
             filepath = input("filepath: ")
@@ -74,7 +109,7 @@ def main():
                 print("No user set. Run `create` first.\n")
                 continue
 
-            loader = TextLoader(file_path=filepath)
+            loader = create_loader(path=filepath)
 
             chunks = app.ingest(
                 loader=loader,
