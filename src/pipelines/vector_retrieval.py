@@ -1,8 +1,8 @@
-from database.pg_retrieval import PGRetriever
+from database.vector_retrieval import VectorRetriever
 from models.user import User
 
-class RetrievalPipeline:
-    def __init__(self, retriever:PGRetriever=None, vectorstore=None):
+class VectorRetrieval:
+    def __init__(self, retriever:VectorRetriever=None, vectorstore=None):
         self.retriever = retriever
         self.vectorstore = vectorstore
 

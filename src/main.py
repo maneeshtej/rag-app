@@ -1,8 +1,4 @@
-from database.pg_vectorstore import PGVectorStore
-from pipelines.ingestion_pipeline import IngestionPipeline
-from pipeline import MainPipeline
 from langchain_community.document_loaders import TextLoader, PyPDFLoader, Docx2txtLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.messages import HumanMessage, AIMessage
 from services.user_service import create_user, user_login
 from bootstrap.bootstrap import create_app
@@ -103,20 +99,38 @@ def main():
                     print(files)        
 
         elif cmd.lower() == "add":
-            filepath = input("filepath: ")
-
             if current_user is None:
                 print("No user set. Run `create` first.\n")
                 continue
 
-            loader = create_loader(path=filepath)
+            ingest_type = input("ingest type (vector/sql): ").strip().lower()
 
-            chunks = app.ingest(
-                loader=loader,
-                user=current_user
-            )
+            if ingest_type == "vector":
+                filepath = input("filepath: ").strip()
+                loader = create_loader(path=filepath)
 
-            print(chunks)
+                result = app.ingest_vector(
+                    loader=loader,
+                    user=current_user
+                )
+
+                print("Vector ingestion completed.")
+                print(result)
+
+            elif ingest_type == "sql":
+                image_path = input("image path: ").strip()
+
+                result = app.ingest_sql(
+                    path=image_path,
+                    user=current_user
+                )
+
+                print("SQL ingestion completed.")
+                print(result)
+
+            else:
+                print("Invalid ingest type. Choose `vector` or `sql`.")
+
 
         elif cmd.lower() == "delete":
             if current_user is None:

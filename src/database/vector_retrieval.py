@@ -1,10 +1,10 @@
-from database.pg_vectorstore import PGVectorStore
+from database.vector_store import VectorStore
 from models.user import User
 
 
-class PGRetriever:
+class VectorRetriever:
     def __init__(self, vectorstore, embedder):
-        self.vectorstore: PGVectorStore = vectorstore
+        self.vectorstore: VectorStore = vectorstore
         self.embedder = embedder
 
     def retrieve(self, query:str, user:User, k:int = 5):

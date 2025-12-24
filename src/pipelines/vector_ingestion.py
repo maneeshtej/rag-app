@@ -5,7 +5,7 @@ from models.user import User
 from langchain_core.documents import Document
 
 
-class IngestionPipeline:
+class VectorIngestion:
     def __init__(self, splitter=None, vectorstore=None):
         self.splitter = splitter
         self.vectorstore = vectorstore

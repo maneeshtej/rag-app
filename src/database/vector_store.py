@@ -5,7 +5,7 @@ from typing import List
 from models.document import StoredChunk, StoredFile
 from models.user import User
 
-class PGVectorStore:
+class VectorStore:
     def __init__(self, embedder, conn):
         self.conn = conn
         self.embedder = embedder

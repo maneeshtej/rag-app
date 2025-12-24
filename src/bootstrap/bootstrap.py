@@ -1,15 +1,16 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from database.vectorstore import create_vectorstore, create_embedder
+from database.dependencies import create_vectorstore, create_embedder
 from database.db import get_connection
-from database.pg_vectorstore import PGVectorStore
-from database.pg_retrieval import PGRetriever
-from database.llm import create_llm
+from database.vector_store import VectorStore
+from database.vector_retrieval import VectorRetriever
+from database.llm import create_llm, create_vision_llm
 from pipeline import MainPipeline
-from pipelines.ingestion_pipeline import IngestionPipeline
-from pipelines.retrieval_pipeline import RetrievalPipeline
+from pipelines.vector_ingestion import VectorIngestion
+from pipelines.vector_retrieval import VectorRetrieval
 from pipelines.answer_pipeline import AnswerPipeline
+from pipelines.sql_ingestion import SQLIngestion
 
-def create_ingestion_app():
+def create_vector_ingestion_app():
     splitter = RecursiveCharacterTextSplitter(
         separators=["\n\n", "\n", ". ", " ", ""],
         chunk_size=500,
@@ -17,22 +18,31 @@ def create_ingestion_app():
     )
     embedder = create_embedder()
     conn = get_connection()
-    vectorstore = PGVectorStore(embedder=embedder, conn=conn)
+    vectorstore = VectorStore(embedder=embedder, conn=conn)
 
-    ingestion = IngestionPipeline(splitter=splitter, vectorstore=vectorstore)
+    ingestion = VectorIngestion(splitter=splitter, vectorstore=vectorstore)
   
 
     return ingestion
 
+def create_sql_ingestion_app():
+    conn = get_connection()
+    llm = create_llm()
+    vision_llm = create_vision_llm()
+
+    sql_ingestion: SQLIngestion = SQLIngestion(conn=conn, llm=llm, vision_llm=vision_llm)
+
+    return sql_ingestion
+
 def create_retrival_app(k:int = 5):
     embedder = create_embedder()
     conn = get_connection()
-    vectorstore: PGVectorStore = PGVectorStore(embedder=embedder, conn=conn)
+    vectorstore: VectorStore = VectorStore(embedder=embedder, conn=conn)
 
-    retriever: PGRetriever = PGRetriever(vectorstore=vectorstore, embedder=embedder)
+    retriever: VectorRetriever = VectorRetriever(vectorstore=vectorstore, embedder=embedder)
 
     return(
-        RetrievalPipeline(retriever=retriever)
+        VectorRetrieval(retriever=retriever)
     )
 
 def create_answer_app():
@@ -42,12 +52,12 @@ def create_answer_app():
     return answer
 
 
-
 def create_app():
     app: MainPipeline = MainPipeline(
-        ingestion=create_ingestion_app(),
-        retriever=create_retrival_app(),
-        answer=create_answer_app()
+        vector_ingestion=create_vector_ingestion_app(),
+        vector_retriever=create_retrival_app(),
+        answer=create_answer_app(),
+        sql_ingestion=create_sql_ingestion_app()
         )
 
     return app
