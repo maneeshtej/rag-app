@@ -1,43 +1,36 @@
 
+import json
 from uuid import UUID, uuid4
 from langchain_core.documents import Document
 from typing import List
-from models.document import StoredChunk, StoredFile
-from models.user import User
+from src.models.document import StoredChunk, StoredFile
+from src.models.user import User
 
 class VectorStore:
     def __init__(self, embedder, conn):
         self.conn = conn
         self.embedder = embedder
 
-    
-    def _doc_to_stored_chunk(
-        self,
-        doc: Document,
-        embedding: list[float]
-    ) -> StoredChunk:
-        return StoredChunk(
-            id=UUID(doc.metadata["id"]) if "id" in doc.metadata else uuid4(),
-            content=doc.page_content,
-            embedding=embedding,
-            owner_id=UUID(doc.metadata["owner_id"]),
-            role=doc.metadata["role"],
-            access_level=doc.metadata["access_level"],
-            source=doc.metadata.get("source"),
-        )
+        
+    def _insert_chunks(self, chunks: List[StoredChunk]):
+        query = """
+        INSERT INTO vector_chunks (id, file_id, content, embedding, metadata)
+        VALUES (%s, %s, %s, %s, %s)
+        """
 
-    def _stored_chunk_to_doc(self, chunk: StoredChunk) -> Document:
-        return Document(
-            page_content=chunk.content,
-            metadata={
-                "id": str(chunk.id),
-                "owner_id": str(chunk.owner_id),
-                "role": chunk.role,
-                "access_level": chunk.access_level,
-                "source": chunk.source,
-            },
-        )
-    
+        with self.conn.cursor() as cur:
+            for chunk in chunks:
+                cur.execute(
+                    query,
+                    (
+                        str(chunk.id),
+                        str(chunk.file_id),
+                        chunk.content,
+                        chunk.embedding,
+                        json.dumps(chunk.metadata)
+                    )
+                )
+
     def _insert_file(self, file: StoredFile):
         query = """
         INSERT INTO files (id, owner_id, role, access_level, source)
@@ -55,26 +48,7 @@ class VectorStore:
                     file.source,
                 )
             )
-    
-    def _insert_chunks(self, chunks: List[StoredChunk]):
-        query = """
-        INSERT INTO vector_chunks (id, file_id, content, embedding)
-        VALUES (%s, %s, %s, %s)
-        """
 
-        with self.conn.cursor() as cur:
-            for chunk in chunks:
-                cur.execute(
-                    query,
-                    (
-                        str(chunk.id),
-                        str(chunk.file_id),
-                        chunk.content,
-                        chunk.embedding
-                    )
-                )
-
-    
 
     def add_documents(self, docs: List[Document]):
         file_id  = uuid4()
@@ -97,8 +71,11 @@ class VectorStore:
                 file_id=file_id,
                 content=doc.page_content,
                 embedding=emb,
-            ) for doc, emb in zip(docs, embeddings)
+                metadata=doc.metadata or {},
+            )
+            for doc, emb in zip(docs, embeddings)
         ]
+
 
         try:
             self._insert_file(stored_file)
@@ -119,11 +96,17 @@ class VectorStore:
     ) -> List[Document]:
         query = """
         SELECT 
-        c.id, c.content, f.id, f.owner_id, f.role, f.source, f.access_level
+        c.id,
+        c.content,
+        c.metadata,
+        f.id,
+        f.owner_id,
+        f.role,
+        f.source,
+        f.access_level
         FROM vector_chunks c
-        JOIN files f on c.file_id = f.id
-        WHERE
-            f.access_level >= %s
+        JOIN files f ON c.file_id = f.id
+        WHERE f.access_level >= %s
         ORDER BY c.embedding <-> %s::vector
         LIMIT %s
         """
@@ -139,20 +122,30 @@ class VectorStore:
             )
             rows = cur.fetchall()
 
-        documents = [
-            Document(
-                page_content=row[1],
-                metadata={
-                    "chunk_id": str(row[0]),
-                    "file_id": str(row[2]),
-                    "owner_id": str(row[3]),
-                    "role": row[4],
-                    "source": row[5],
-                    "access_level": row[6],
-                },
+        documents:List[Document] = []
+
+        for row in rows:
+            raw_meta = row[2]
+
+            if raw_meta is None:
+                raw_meta={}
+            elif isinstance(raw_meta, str):
+                raw_meta = json.loads(raw_meta)
+
+            documents.append(
+                Document(
+                    page_content=row[1],
+                    metadata={
+                        **raw_meta,
+                        "chunk_id": str(row[0]),
+                        "file_id": str(row[3]),
+                        "owner_id": str(row[4]),
+                        "role": row[5],
+                        "source": row[6],
+                        "access_level": row[7],
+                    },
+                )
             )
-            for row in rows
-        ]
 
         return documents
     
@@ -210,6 +203,42 @@ class VectorStore:
                 return deleted
             else:
                 print("Nothing to delete")
+
+    def ingest_schema(self, docs: List[Document]):
+        file_id = uuid4()
+        meta = docs[0].metadata
+
+        stored_file = StoredFile(
+            id=file_id,
+            owner_id=UUID(meta["owner_id"]),
+            role=meta["role"],
+            access_level=meta["access_level"],
+            source="schema:all",
+        )
+
+        texts = [doc.page_content for doc in docs]
+        embeddings = self.embedder.embed_documents(texts)
+
+        stored_chunks = [
+            StoredChunk(
+                id=uuid4(),
+                file_id=file_id,
+                content=doc.page_content,
+                embedding=emb,
+                metadata=doc.metadata or {},
+            )
+            for doc, emb in zip(docs, embeddings)
+        ]
+
+        try:
+            self._insert_file(stored_file)
+            self._insert_chunks(stored_chunks)
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
+
+        return "schema_ingested"
 
 
 

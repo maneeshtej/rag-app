@@ -1,6 +1,6 @@
 import uuid
-from database.db import get_connection
-from models.user import User
+from src.database.db import get_connection
+from src.models.user import User
 
 def create_user(
         username: str,

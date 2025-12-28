@@ -1,7 +1,11 @@
 from langchain_community.document_loaders import TextLoader, PyPDFLoader, Docx2txtLoader
 from langchain_core.messages import HumanMessage, AIMessage
-from services.user_service import create_user, user_login
-from bootstrap.bootstrap import create_app
+from src.services.user_service import create_user, user_login
+from src.bootstrap.bootstrap import create_app, create_vector_store
+from src.schema.schema import schema, system_user, bare_schema
+from src.schema.setup_schema import schema_to_documents
+
+vector_store = create_vector_store()
 
 def create_loader(path: str):
     if path.endswith(".txt"):
@@ -24,11 +28,13 @@ def main():
     print("  list          -> list all the uploaded files")
     print("  delete        -> delete a file with source")
     print("  exit          -> quit")
+    print("  update schema -> ingest SQL schema into vector store")
+
     print("_" * 100)
 
     app = create_app()
 
-    current_user = None  
+    current_user = system_user
 
     while True:
         cmd = input(">> ").strip()
@@ -75,19 +81,22 @@ def main():
                     print("Exiting chat mode.\n")
                     break
 
+                test = True
+
                 answer = app.inference(
                     query=query,
                     user=current_user,
-                    chat_history=chat_history
+                    chat_history=chat_history,
+                    test=test
                 )
 
                 print(f"assistant> {answer}\n")
+                if not test:
+                    chat_history.append(HumanMessage(content=query))
+                    chat_history.append(AIMessage(content=answer))
 
-                chat_history.append(HumanMessage(content=query))
-                chat_history.append(AIMessage(content=answer))
-
-                if len(chat_history) > 10:  
-                    chat_history = chat_history[-10:]
+                    if len(chat_history) > 10:  
+                        chat_history = chat_history[-10:]
 
 
         elif cmd.lower() == "list":
@@ -95,7 +104,7 @@ def main():
                         print("No user set. Run `create` first.\n")
                         continue
 
-                    files = app.retriever.list_files(current_user)
+                    files = app.vector_retriever.list_files(current_user)
                     print(files)        
 
         elif cmd.lower() == "add":
@@ -142,12 +151,23 @@ def main():
                 print("Try again")
                 continue
 
-            output = app.retriever.delete_file(source)
+            output = app.vector_retriever.delete_file(source)
             print(output)
+
+        elif cmd.lower() == "update schema":
+
+            docs = schema_to_documents(schema=bare_schema, user=system_user)
+            result = app.ingest_schema(docs=docs)
+
+            print("Schema ingestion completed.")
+            print(result)
+
                 
 
         else:
             print("Try again")
+
+        
 
 
 if __name__ == "__main__":

@@ -18,3 +18,4 @@ class StoredChunk:
     file_id: UUID
     content: str
     embedding: List[float]
+    metadata: dict

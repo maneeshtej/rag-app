@@ -1,5 +1,5 @@
-from database.vector_store import VectorStore
-from models.user import User
+from src.database.vector_store import VectorStore
+from src.models.user import User
 
 
 class VectorRetriever:

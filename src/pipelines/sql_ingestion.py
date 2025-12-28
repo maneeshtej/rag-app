@@ -1,6 +1,6 @@
-from models.user import User
+from src.models.user import User
 from langchain_core.messages import HumanMessage
-from services.extract_service import ocr_image
+from src.services.extract_service import ocr_image
 
 class SQLIngestion:
     def __init__(self, conn, llm, vision_llm):

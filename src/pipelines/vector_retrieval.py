@@ -1,5 +1,5 @@
-from database.vector_retrieval import VectorRetriever
-from models.user import User
+from src.database.vector_retrieval import VectorRetriever
+from src.models.user import User
 
 class VectorRetrieval:
     def __init__(self, retriever:VectorRetriever=None, vectorstore=None):
