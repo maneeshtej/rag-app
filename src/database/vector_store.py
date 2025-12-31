@@ -103,11 +103,12 @@ class VectorStore:
         f.owner_id,
         f.role,
         f.source,
-        f.access_level
+        f.access_level,
+        1 - (c.embedding <=> %s::vector) as similarity
         FROM vector_chunks c
         JOIN files f ON c.file_id = f.id
         WHERE f.access_level >= %s
-        ORDER BY c.embedding <-> %s::vector
+        ORDER BY similarity desc
         LIMIT %s
         """
 
@@ -115,8 +116,8 @@ class VectorStore:
             cur.execute(
                 query,
                 (
-                    min_access_level,
                     query_embedding,
+                    min_access_level,
                     k,
                 )
             )
@@ -143,6 +144,7 @@ class VectorStore:
                         "role": row[5],
                         "source": row[6],
                         "access_level": row[7],
+                        "similarity": row[8]
                     },
                 )
             )

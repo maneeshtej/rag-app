@@ -1,6 +1,9 @@
 from langchain_ollama import ChatOllama
+from langchain_google_genai import ChatGoogleGenerativeAI
+from dotenv import load_dotenv
+import os
 
-def create_llm(
+def create_phi_llm(
     model: str = "phi3:mini",
     temperature: float = 0.2,
 ):
@@ -12,3 +15,8 @@ def create_llm(
 
 def create_vision_llm(model:str = "llava:7b", temperature:float = 0.2):
     return ChatOllama(model=model, temperature=temperature)
+
+def create_google_llm():
+    print('loaded llm')
+    load_dotenv()
+    return ChatGoogleGenerativeAI(model= "gemini-2.5-flash")

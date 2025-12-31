@@ -2,10 +2,8 @@ from langchain_community.document_loaders import TextLoader, PyPDFLoader, Docx2t
 from langchain_core.messages import HumanMessage, AIMessage
 from src.services.user_service import create_user, user_login
 from src.bootstrap.bootstrap import create_app, create_vector_store
-from src.schema.schema import schema, system_user, bare_schema
+from src.schema.schema import schema, system_user, schema
 from src.schema.setup_schema import schema_to_documents
-
-vector_store = create_vector_store()
 
 def create_loader(path: str):
     if path.endswith(".txt"):
@@ -156,7 +154,7 @@ def main():
 
         elif cmd.lower() == "update schema":
 
-            docs = schema_to_documents(schema=bare_schema, user=system_user)
+            docs = schema_to_documents(schema=schema, user=system_user)
             result = app.ingest_schema(docs=docs)
 
             print("Schema ingestion completed.")
