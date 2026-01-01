@@ -1,6 +1,7 @@
 # models/document.py
 
 from dataclasses import dataclass
+from datetime import datetime
 from uuid import UUID
 from typing import Optional, List
 
@@ -19,3 +20,14 @@ class StoredChunk:
     content: str
     embedding: List[float]
     metadata: dict
+
+@dataclass 
+class RuleChunk:
+    name: str
+    content: str
+    type: str
+    priority: int
+
+    id: Optional[UUID] = None
+    created_at: Optional[datetime] = None
+    embedding: Optional[list[float]] = None

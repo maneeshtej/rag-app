@@ -1,6 +1,6 @@
 from typing import Dict, List
-from database.sql_retriever import SQLRetriever
-from database.vector_retriever import VectorRetriever
+from src.database.sql.sql_retriever import SQLRetriever
+from src.database.vector.vector_retriever import VectorRetriever
 from src.models.user import User
 from src.schema.schema import SCHEMA_MAP, SCHEMA_EXTENSION
 from langchain_core.documents import Document
@@ -24,11 +24,23 @@ class RetrievalPipeline:
             k=k,
         )
 
-        print(f"""Results\n\n""")
+        print(f"""\n\nVector Results\n\n""")
+
+        for result in results:
+            print(f"{[result.metadata.get('source'),  result.metadata.get('similarity')]}")
+        
+        return results
+    
+    def _get_sql_results(
+            self, *, query:str, user:User, k:int
+    ):
+        results = self.sql_retriever.retrieve(query=query, user=user, k=k)
+
+        print(f"""\n\nSQL Results\n\n""")
 
         for result in results:
             print(f"{[result.metadata.get('source'), result.metadata.get('table_name', 'vector'), result.metadata.get('similarity')]}")
-        
+
         return results
 
 
@@ -37,5 +49,9 @@ class RetrievalPipeline:
             raise ValueError("Pipeline dependencies not initialised")
 
         vector_chunks = self._get_vector_results(query, user, k)
+        sql_chunks = self._get_sql_results(query=query, user=user, k=k)
 
-        return vector_chunks
+        return {
+            "vector": vector_chunks,
+            "sql": sql_chunks
+        }

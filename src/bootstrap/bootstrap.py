@@ -1,10 +1,11 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from src.database.db import get_connection
-from src.database.vector_store import VectorStore
-from database.vector_retriever import VectorRetriever
+from src.database.vector.vector_store import VectorStore
+from src.database.vector.vector_retriever import VectorRetriever
 from src.database.llm import create_vision_llm, create_google_llm
 from src.database.dependencies import create_embedder
+from src.database.guidance.guidance_store import GuidanceStore
 
 from src.pipelines.vector_ingestion import VectorIngestion
 from src.pipelines.vector_retrieval import VectorRetrieval
@@ -37,12 +38,15 @@ def create_vector_store(conn):
         conn=conn,
     )
 
+def create_guidance_store(vector_store, vector_retriever):
+    print('loaded vector store')
+    return GuidanceStore(vector_store=vector_store, vector_retriever=vector_retriever)
+
 
 def create_vector_retriever(vector_store):
     print('loaded vector retriever')
     return VectorRetriever(
-        vectorstore=vector_store,
-        embedder=vector_store.embedder,
+        vector_store=vector_store
     )
 
 
@@ -92,9 +96,10 @@ def create_app() -> MainPipeline:
     vector_retriever = create_vector_retriever(vector_store)
 
     return MainPipeline(
-        vector_ingestion=create_vector_ingestion(vector_store),
-        vector_retriever=create_vector_retrieval(vector_retriever),
-        sql_ingestion=create_sql_ingestion(conn, llms),
-        answer=create_answer_pipeline(llms["llm"]),
+        vector_ingestion=create_vector_ingestion(vector_store=vector_store),
+        vector_retriever=create_vector_retrieval(vector_retriever=vector_retriever),
+        sql_ingestion=create_sql_ingestion(conn=conn, llms=llms),
+        answer=create_answer_pipeline(llm=llms["llm"]),
         vector_store=vector_store,
+        guidance_store=create_guidance_store(vector_store=vector_store, vector_retriever=vector_retriever)
     )

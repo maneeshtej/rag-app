@@ -6,32 +6,41 @@ from typing import List
 from src.models.document import StoredChunk, StoredFile
 from src.models.user import User
 
+
 class VectorStore:
     def __init__(self, embedder, conn):
         self.conn = conn
         self.embedder = embedder
 
         
-    def _insert_chunks(self, chunks: List[StoredChunk]):
+    def insert_chunks(self, chunks: List[StoredChunk], type:str = "vector"):
         query = """
-        INSERT INTO vector_chunks (id, file_id, content, embedding, metadata)
-        VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO vector_chunks (id, file_id, content, embedding, metadata, type)
+        VALUES (%s, %s, %s, %s, %s, %s)
         """
 
-        with self.conn.cursor() as cur:
-            for chunk in chunks:
-                cur.execute(
-                    query,
-                    (
-                        str(chunk.id),
-                        str(chunk.file_id),
-                        chunk.content,
-                        chunk.embedding,
-                        json.dumps(chunk.metadata)
+        try:
+            with self.conn.cursor() as cur:
+                for chunk in chunks:
+                    cur.execute(
+                        query,
+                        (
+                            str(chunk.id),
+                            str(chunk.file_id),
+                            chunk.content,
+                            chunk.embedding,
+                            json.dumps(chunk.metadata),
+                            type
+                        )
                     )
-                )
+            self.conn.commit()
 
-    def _insert_file(self, file: StoredFile):
+            return "success"
+        except Exception as e:
+            self.conn.rollback()
+            raise 
+
+    def insert_file(self, file: StoredFile):
         query = """
         INSERT INTO files (id, owner_id, role, access_level, source)
         VALUES (%s, %s, %s, %s, %s)
@@ -78,8 +87,8 @@ class VectorStore:
 
 
         try:
-            self._insert_file(stored_file)
-            self._insert_chunks(stored_chunks)
+            self.insert_file(stored_file)
+            self.insert_chunks(stored_chunks)
             self.conn.commit()
         except Exception as e:
             self.conn.rollback()
@@ -93,7 +102,9 @@ class VectorStore:
         k: int,
         owner_id: UUID,
         min_access_level: int,
+        type:str="vector"
     ) -> List[Document]:
+        
         query = """
         SELECT 
         c.id,
@@ -107,7 +118,8 @@ class VectorStore:
         1 - (c.embedding <=> %s::vector) as similarity
         FROM vector_chunks c
         JOIN files f ON c.file_id = f.id
-        WHERE f.access_level >= %s
+        WHERE f.access_level >= %s 
+        AND c.type = %s
         ORDER BY similarity desc
         LIMIT %s
         """
@@ -118,7 +130,8 @@ class VectorStore:
                 (
                     query_embedding,
                     min_access_level,
-                    k,
+                    type,
+                    k
                 )
             )
             rows = cur.fetchall()
@@ -206,41 +219,7 @@ class VectorStore:
             else:
                 print("Nothing to delete")
 
-    def ingest_schema(self, docs: List[Document]):
-        file_id = uuid4()
-        meta = docs[0].metadata
-
-        stored_file = StoredFile(
-            id=file_id,
-            owner_id=UUID(meta["owner_id"]),
-            role=meta["role"],
-            access_level=meta["access_level"],
-            source="schema:all",
-        )
-
-        texts = [doc.page_content for doc in docs]
-        embeddings = self.embedder.embed_documents(texts)
-
-        stored_chunks = [
-            StoredChunk(
-                id=uuid4(),
-                file_id=file_id,
-                content=doc.page_content,
-                embedding=emb,
-                metadata=doc.metadata or {},
-            )
-            for doc, emb in zip(docs, embeddings)
-        ]
-
-        try:
-            self._insert_file(stored_file)
-            self._insert_chunks(stored_chunks)
-            self.conn.commit()
-        except Exception:
-            self.conn.rollback()
-            raise
-
-        return "schema_ingested"
+    
 
 
 

@@ -1,4 +1,4 @@
-from database.vector_retriever import VectorRetriever
+from src.database.vector.vector_retriever import VectorRetriever
 from src.models.user import User
 
 class VectorRetrieval:
