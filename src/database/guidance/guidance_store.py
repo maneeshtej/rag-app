@@ -7,46 +7,45 @@ from src.models.user import User
 
 
 class GuidanceStore:
-    def __init__(self, *, vector_store, vector_retriever, conn, embedder):
-        self.vector_store = vector_store
-        self.vector_retriever = vector_retriever
+    def __init__(self, *, conn, embedder):
+
         self.conn = conn
         self.embedder = embedder
 
     def ingest_schema(self, docs: List[Document]):
-        file_id = uuid4()
-        meta = docs[0].metadata
+        # file_id = uuid4()
+        # meta = docs[0].metadata
 
-        stored_file = StoredFile(
-            id=file_id,
-            owner_id=UUID(meta["owner_id"]),
-            role=meta["role"],
-            access_level=meta["access_level"],
-            source="schema:all",
-        )
+        # stored_file = StoredFile(
+        #     id=file_id,
+        #     owner_id=UUID(meta["owner_id"]),
+        #     role=meta["role"],
+        #     access_level=meta["access_level"],
+        #     source="schema:all",
+        # )
 
-        texts = [doc.page_content for doc in docs]
-        embeddings = self.vector_store.embedder.embed_documents(texts)
+        # texts = [doc.page_content for doc in docs]
+        # embeddings = self.vector_store.embedder.embed_documents(texts)
 
-        stored_chunks = [
-            StoredChunk(
-                id=uuid4(),
-                file_id=file_id,
-                content=doc.page_content,
-                embedding=emb,
-                metadata=doc.metadata or {},
+        # stored_chunks = [
+        #     StoredChunk(
+        #         id=uuid4(),
+        #         file_id=file_id,
+        #         content=doc.page_content,
+        #         embedding=emb,
+        #         metadata=doc.metadata or {},
                 
-            )
-            for doc, emb in zip(docs, embeddings)
-        ]
+        #     )
+        #     for doc, emb in zip(docs, embeddings)
+        # ]
 
-        try:
-            self.vector_store.insert_file(file=stored_file)
-            self.vector_store.insert_chunks(chunks=stored_chunks, type="table")
-            self.vector_store.conn.commit()
-        except Exception as e:
-            self.vector_store.conn.rollback()
-            raise Exception(e)
+        # try:
+        #     self.vector_store.insert_file(file=stored_file)
+        #     self.vector_store.insert_chunks(chunks=stored_chunks, type="table")
+        #     self.vector_store.conn.commit()
+        # except Exception as e:
+        #     self.vector_store.conn.rollback()
+        #     raise Exception(e)
 
         return "schema_ingested"
     
@@ -100,13 +99,11 @@ class GuidanceStore:
     def semantic_search(
         self,
         *,
-        query: str,
+        query_embedding: list[float],
         user: User,
+        type: str,
         k: int = 5,
-        type: str = "query_rule"
-    ) -> list[dict]:
-
-        query_embedding = self.embedder.embed_query(query)
+    ) -> list[RuleChunk]:
 
         sql = """
             SELECT name, content, priority, type
@@ -129,15 +126,16 @@ class GuidanceStore:
                 )
                 rows = cur.fetchall()
 
-            return [
-                {
-                    "name": r[0],
-                    "content": r[1],
-                    "priority": r[2],
-                    "type": r[3],
-                }
-                for r in rows
+            rule_chunks: list[RuleChunk] = [
+                RuleChunk(
+                        name=row[0],
+                        content=row[1],
+                        priority=row[2],
+                        type=row[3]
+                ) for row in rows
             ]
+
+            return rule_chunks
 
         except Exception:
             self.conn.rollback()

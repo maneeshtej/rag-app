@@ -1,7 +1,7 @@
 rules: list[dict] = [
     {
         "name": "department_realisation",
-        "type": "query_rule",
+        "type": "rule",
         "priority": 0,
         "content": """
         Before generating SQL, identify when the user is referring to an academic
