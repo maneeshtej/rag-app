@@ -1,6 +1,7 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from src.database.db import get_connection
+from src.database.vector.vector_ingestor import VectorIngestor
 from src.database.vector.vector_store import VectorStore
 from src.database.vector.vector_retriever import VectorRetriever
 from src.database.llm import create_vision_llm, create_google_llm
@@ -16,6 +17,26 @@ from src.pipeline import MainPipeline
 
 # ---------- Shared resources ----------
 
+def create_vector_store(conn):
+    print("loaded vector store")
+    return VectorStore(conn=conn)
+
+
+def create_vector_retriever(vector_store):
+    print("loaded vector retriever")
+    return VectorRetriever(vector_store=vector_store)
+
+
+def create_vector_ingestor(conn, vector_store):
+    print("loaded vector ingestor")
+    embedder = create_embedder()
+    return VectorIngestor(
+        vector_store=vector_store,
+        embedder=embedder,
+        conn=conn,
+    )
+
+
 def create_connection():
     print('loaded connection')
     return get_connection()
@@ -29,26 +50,9 @@ def create_text_splitter():
         chunk_overlap=50,
     )
 
-
-def create_vector_store(conn):
-    print('loaded vector store')
-    embedder = create_embedder()
-    return VectorStore(
-        embedder=embedder,
-        conn=conn,
-    )
-
 def create_guidance_store(vector_store, vector_retriever):
     print('loaded vector store')
     return GuidanceStore(vector_store=vector_store, vector_retriever=vector_retriever)
-
-
-def create_vector_retriever(vector_store):
-    print('loaded vector retriever')
-    return VectorRetriever(
-        vector_store=vector_store
-    )
-
 
 def create_llms():
     return {
@@ -57,12 +61,13 @@ def create_llms():
     }
 
 
+
 # ---------- Pipeline factories ----------
 
-def create_vector_ingestion(vector_store):
+def create_vector_ingestion(vector_ingestor):
     return VectorIngestion(
         splitter=create_text_splitter(),
-        vectorstore=vector_store,
+        ingestor=vector_ingestor,
     )
 
 
@@ -92,14 +97,21 @@ def create_app() -> MainPipeline:
     conn = create_connection()
     llms = create_llms()
 
+    # --- Vector infra ---
     vector_store = create_vector_store(conn)
     vector_retriever = create_vector_retriever(vector_store)
+    vector_ingestor = create_vector_ingestor(conn, vector_store)
+
+    # --- Pipelines ---
+    vector_ingestion = create_vector_ingestion(vector_ingestor)
+    vector_retrieval = create_vector_retrieval(vector_retriever)
+    sql_ingestion = create_sql_ingestion(conn=conn, llms=llms)
+    answer_pipeline = create_answer_pipeline(llm=llms["llm"])
 
     return MainPipeline(
-        vector_ingestion=create_vector_ingestion(vector_store=vector_store),
-        vector_retriever=create_vector_retrieval(vector_retriever=vector_retriever),
-        sql_ingestion=create_sql_ingestion(conn=conn, llms=llms),
-        answer=create_answer_pipeline(llm=llms["llm"]),
-        vector_store=vector_store,
-        guidance_store=create_guidance_store(vector_store=vector_store, vector_retriever=vector_retriever)
+        vector_ingestion=vector_ingestion,
+        sql_ingestion=sql_ingestion,
+        vector_retriever=vector_retrieval,
+        answer=answer_pipeline,
     )
+

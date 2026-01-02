@@ -1,51 +1,23 @@
+# src/database/vector_store.py
 
 import json
-from uuid import UUID, uuid4
-from langchain_core.documents import Document
+from uuid import UUID
 from typing import List
+from langchain_core.documents import Document
 from src.models.document import StoredChunk, StoredFile
 from src.models.user import User
 
 
 class VectorStore:
-    def __init__(self, embedder, conn):
+    def __init__(self, conn):
         self.conn = conn
-        self.embedder = embedder
-
-        
-    def insert_chunks(self, chunks: List[StoredChunk], type:str = "vector"):
-        query = """
-        INSERT INTO vector_chunks (id, file_id, content, embedding, metadata, type)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        """
-
-        try:
-            with self.conn.cursor() as cur:
-                for chunk in chunks:
-                    cur.execute(
-                        query,
-                        (
-                            str(chunk.id),
-                            str(chunk.file_id),
-                            chunk.content,
-                            chunk.embedding,
-                            json.dumps(chunk.metadata),
-                            type
-                        )
-                    )
-            self.conn.commit()
-
-            return "success"
-        except Exception as e:
-            self.conn.rollback()
-            raise 
+    # ---------- FILES ----------
 
     def insert_file(self, file: StoredFile):
         query = """
         INSERT INTO files (id, owner_id, role, access_level, source)
         VALUES (%s, %s, %s, %s, %s)
         """
-
         with self.conn.cursor() as cur:
             cur.execute(
                 query,
@@ -58,115 +30,7 @@ class VectorStore:
                 )
             )
 
-
-    def add_documents(self, docs: List[Document]):
-        file_id  = uuid4()
-        meta = docs[0].metadata
-
-        stored_file = StoredFile(
-            id=file_id,
-            owner_id=UUID(meta['owner_id']),
-            role=meta['role'],
-            access_level=meta['access_level'],
-            source=meta.get('source')
-        )
-
-        texts = [doc.page_content for doc in docs]
-        embeddings = self.embedder.embed_documents(texts)
-
-        stored_chunks = [
-            StoredChunk(
-                id=uuid4(),
-                file_id=file_id,
-                content=doc.page_content,
-                embedding=emb,
-                metadata=doc.metadata or {},
-            )
-            for doc, emb in zip(docs, embeddings)
-        ]
-
-
-        try:
-            self.insert_file(stored_file)
-            self.insert_chunks(stored_chunks)
-            self.conn.commit()
-        except Exception as e:
-            self.conn.rollback()
-            raise e
-        
-        return "success"
-
-    def similarity_search(
-        self,
-        query_embedding: list[float],
-        k: int,
-        owner_id: UUID,
-        min_access_level: int,
-        type:str="vector"
-    ) -> List[Document]:
-        
-        query = """
-        SELECT 
-        c.id,
-        c.content,
-        c.metadata,
-        f.id,
-        f.owner_id,
-        f.role,
-        f.source,
-        f.access_level,
-        1 - (c.embedding <=> %s::vector) as similarity
-        FROM vector_chunks c
-        JOIN files f ON c.file_id = f.id
-        WHERE f.access_level >= %s 
-        AND c.type = %s
-        ORDER BY similarity desc
-        LIMIT %s
-        """
-
-        with self.conn.cursor() as cur:
-            cur.execute(
-                query,
-                (
-                    query_embedding,
-                    min_access_level,
-                    type,
-                    k
-                )
-            )
-            rows = cur.fetchall()
-
-        documents:List[Document] = []
-
-        for row in rows:
-            raw_meta = row[2]
-
-            if raw_meta is None:
-                raw_meta={}
-            elif isinstance(raw_meta, str):
-                raw_meta = json.loads(raw_meta)
-
-            documents.append(
-                Document(
-                    page_content=row[1],
-                    metadata={
-                        **raw_meta,
-                        "chunk_id": str(row[0]),
-                        "file_id": str(row[3]),
-                        "owner_id": str(row[4]),
-                        "role": row[5],
-                        "source": row[6],
-                        "access_level": row[7],
-                        "similarity": row[8]
-                    },
-                )
-            )
-
-        return documents
-    
     def list_files(self, user: User) -> List[StoredFile]:
-        owner_id = user.id
-
         query = """
         SELECT id, owner_id, role, access_level, source
         FROM files
@@ -175,54 +39,106 @@ class VectorStore:
         """
 
         with self.conn.cursor() as cur:
+            cur.execute(query, (user.id, user.id))
+            rows = cur.fetchall()
+
+        return [
+            StoredFile(
+                id=row[0],
+                owner_id=row[1],
+                role=row[2],
+                access_level=row[3],
+                source=row[4],
+            )
+            for row in rows
+        ]
+
+    def delete_file(self, source: str) -> int:
+        query = "DELETE FROM files WHERE source = %s"
+
+        with self.conn.cursor() as cur:
+            cur.execute(query, (source,))
+            deleted = cur.rowcount
+
+        return deleted
+
+    # ---------- CHUNKS ----------
+
+    def insert_chunks(self, chunks: List[StoredChunk], type: str = "vector"):
+        query = """
+        INSERT INTO vector_chunks (id, file_id, content, embedding, metadata, type)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        """
+
+        with self.conn.cursor() as cur:
+            for chunk in chunks:
+                cur.execute(
+                    query,
+                    (
+                        str(chunk.id),
+                        str(chunk.file_id),
+                        chunk.content,
+                        chunk.embedding,
+                        json.dumps(chunk.metadata),
+                        type,
+                    )
+                )
+
+    # ---------- RETRIEVAL ----------
+
+    def similarity_search(
+        self,
+        query_embedding: list[float],
+        k: int,
+        min_access_level: int,
+        type: str = "vector",
+    ) -> List[Document]:
+        query = """
+        SELECT 
+            c.id,
+            c.content,
+            c.metadata,
+            f.id,
+            f.owner_id,
+            f.role,
+            f.source,
+            f.access_level,
+            1 - (c.embedding <=> %s::vector) AS similarity
+        FROM vector_chunks c
+        JOIN files f ON c.file_id = f.id
+        WHERE f.access_level >= %s
+          AND c.type = %s
+        ORDER BY similarity DESC
+        LIMIT %s
+        """
+
+        with self.conn.cursor() as cur:
             cur.execute(
                 query,
-                (
-                    owner_id, owner_id
+                (query_embedding, min_access_level, type, k),
+            )
+            rows = cur.fetchall()
+
+        documents = []
+        for row in rows:
+            meta = row[2] or {}
+            if isinstance(meta, str):
+                meta = json.loads(meta)
+
+            documents.append(
+                Document(
+                    page_content=row[1],
+                    metadata={
+                        **meta,
+                        "chunk_id": str(row[0]),
+                        "file_id": str(row[3]),
+                        "owner_id": str(row[4]),
+                        "role": row[5],
+                        "source": row[6],
+                        "access_level": row[7],
+                        "similarity": row[8],
+                    },
                 )
             )
 
-            rows = cur.fetchall()
-
-            stored_files = [
-                StoredFile(
-                    id=row[0],
-                    owner_id=row[1],
-                    role=row[2],
-                    access_level=row[3],
-                    source=row[4]
-                ) for row in rows
-            ]
-
-            return stored_files
-        
-    def delete_file(self, source:str):
-            query = """
-            DELETE FROM files
-            WHERE source = %s
-            """
-
-            try:
-                with self.conn.cursor() as cur:
-                    cur.execute(
-                        query,
-                        (source,)
-                    )
-                    deleted = cur.rowcount
-
-                    self.conn.commit()
-            except Exception as e:
-                self.conn.rollback()
-                raise e
-            if deleted > 0:
-                return deleted
-            else:
-                print("Nothing to delete")
-
-    
-
-
-
-        
-    
-    
+        return documents
