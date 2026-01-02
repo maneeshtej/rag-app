@@ -28,3 +28,44 @@ class SQLStore:
             self.conn.close()
         except Exception as e:
             pass
+
+    def resolve_entity(
+        self,
+        *,
+        table: str,
+        columns: list[str],
+        value: str,
+        k: int = 5
+    ) -> list[dict]:
+        """
+        Generic entity resolver.
+        Performs ILIKE search across given columns and returns top-k rows.
+        """
+
+        if not columns:
+            raise ValueError("columns must not be empty")
+
+        # Build OR conditions safely
+        conditions = " OR ".join(
+            f"{col} ILIKE %s" for col in columns
+        )
+
+        sql = f"""
+            SELECT *
+            FROM {table}
+            WHERE {conditions}
+            LIMIT %s
+        """
+
+        params = [f"%{value}%"] * len(columns)
+        params.append(k)
+
+        with self.conn.cursor() as cur:
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+            colnames = [desc[0] for desc in cur.description]
+
+        return [
+            dict(zip(colnames, row))
+            for row in rows
+        ]

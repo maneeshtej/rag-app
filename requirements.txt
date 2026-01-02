@@ -37,6 +37,8 @@ langchain-ollama
 pytesseract
 pillow
 opencv-python
+transformers
+sentencepiece
 
 
 

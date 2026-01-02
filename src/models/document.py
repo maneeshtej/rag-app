@@ -5,6 +5,8 @@ from datetime import datetime
 from uuid import UUID
 from typing import Optional, List
 
+from sympy import content
+
 @dataclass
 class StoredFile:
     id: UUID
@@ -29,5 +31,34 @@ class RuleChunk:
     priority: int
 
     id: Optional[UUID] = None
-    created_at: Optional[datetime] = None
     embedding: Optional[list[float]] = None
+    similarity: Optional[float] = None
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "content": self.content,
+            "type": self.type,
+            "priority": self.priority,
+            "similarity": self.similarity,
+        }
+
+@dataclass
+class SchemaChunk:
+    name: str
+    schema: str
+
+    content: Optional[str] = None
+    related_tables: Optional[list[str]] = None
+    embedding: Optional[list[float]] = None
+    similarity: Optional[float] = None
+
+    def to_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "schema": self.schema,
+            "content": self.content,
+            "related_tables": self.related_tables,
+            "similarity": self.similarity,
+        }
