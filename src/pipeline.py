@@ -8,12 +8,12 @@ class MainPipeline:
         self,
         vector_ingestion,
         sql_ingestion,
-        vector_retriever,
+        retrieval,
         answer,
     ):
         self.vector_ingestion = vector_ingestion
         self.sql_ingestion = sql_ingestion
-        self.vector_retriever = vector_retriever
+        self.retrieval = retrieval
         self.answer = answer
 
     # ---------- INGESTION ----------
@@ -30,12 +30,6 @@ class MainPipeline:
 
         return self.sql_ingestion.run(path, user)
 
-    def ingest_schema(self, docs: List[Document]):
-        if not self.guidance_ingestion:
-            raise ValueError("Guidance ingestion is not configured")
-
-        return self.guidance_ingestion.ingest_schema(docs)
-
     # ---------- INFERENCE ----------
 
     def inference(
@@ -48,10 +42,10 @@ class MainPipeline:
     ):
         chat_history = chat_history or []
 
-        if not all([self.vector_retriever, self.answer]):
+        if not all([self.retrieval, self.answer]):
             raise ValueError("Inference pipeline is not fully configured")
 
-        docs = self.vector_retriever.run(query, user)
+        docs = self.retrieval.run(query, user)
 
         if test:
             return docs

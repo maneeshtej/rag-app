@@ -1,6 +1,10 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+from src.database.llm import create_groq_llm
 from src.database.db import get_connection
+from src.database.guidance.guidance_retriever import GuidanceRetriever
+from src.database.sql.sql_retriever import SQLRetriever
+from src.database.sql.sql_store import SQLStore
 from src.database.vector.vector_ingestor import VectorIngestor
 from src.database.vector.vector_store import VectorStore
 from src.database.vector.vector_retriever import VectorRetriever
@@ -8,6 +12,7 @@ from src.database.llm import create_vision_llm, create_google_llm
 from src.database.dependencies import create_embedder
 from src.database.guidance.guidance_store import GuidanceStore
 
+from src.pipelines.retrieval_pipeline import RetrievalPipeline
 from src.pipelines.vector_ingestion import VectorIngestion
 from src.pipelines.vector_retrieval import VectorRetrieval
 from src.pipelines.answer_pipeline import AnswerPipeline
@@ -22,9 +27,9 @@ def create_vector_store(conn):
     return VectorStore(conn=conn)
 
 
-def create_vector_retriever(vector_store):
+def create_vector_retriever(vector_store, embedder):
     print("loaded vector retriever")
-    return VectorRetriever(vector_store=vector_store)
+    return VectorRetriever(vector_store=vector_store, embedder=embedder)
 
 
 def create_vector_ingestor(conn, vector_store):
@@ -50,15 +55,28 @@ def create_text_splitter():
         chunk_overlap=50,
     )
 
-def create_guidance_store(vector_store, vector_retriever):
+def create_guidance_store(conn):
     print('loaded vector store')
-    return GuidanceStore(vector_store=vector_store, vector_retriever=vector_retriever)
+    return GuidanceStore(conn=conn)
 
-def create_llms():
-    return {
-        "llm": create_google_llm(),
-        "vision_llm": create_vision_llm(),
-    }
+def create_sql_store(conn):
+    return SQLStore(
+        conn=conn
+    )
+
+
+def create_sql_retriever(guidance_retriever, sql_store, llm):
+    return SQLRetriever(
+        guidance_retriever=guidance_retriever,
+        sql_store=sql_store,
+        llm=llm
+    )
+
+def create_guidance_retriever(guidance_store, embedder):
+    return GuidanceRetriever(
+        guidance_store=guidance_store,
+        embedder=embedder
+    )
 
 
 
@@ -77,11 +95,11 @@ def create_vector_retrieval(vector_retriever):
     )
 
 
-def create_sql_ingestion(conn, llms):
+def create_sql_ingestion(conn, llm):
     return SQLIngestion(
         conn=conn,
-        llm=llms["llm"],
-        vision_llm=llms["vision_llm"],
+        llm=llm,
+        vision_llm=llm,
     )
 
 
@@ -90,28 +108,44 @@ def create_answer_pipeline(llm):
         llm=llm,
     )
 
+def create_retrieval_pipeline(vector_retriever, sql_retriever, routing_llm):
+    return RetrievalPipeline(
+        vector_retriever=vector_retriever,
+        sql_retriever=sql_retriever,
+        routing_llm=routing_llm
+    )
+
 
 # ---------- App wiring ----------
 
 def create_app() -> MainPipeline:
     conn = create_connection()
-    llms = create_llms()
+    llm = create_groq_llm()
+    embedder = create_embedder()
+
+    # guidance
+    guidance_store = create_guidance_store(conn=conn)
+    guidance_retriever = create_guidance_retriever(guidance_store=guidance_store, embedder=embedder)
 
     # --- Vector infra ---
-    vector_store = create_vector_store(conn)
-    vector_retriever = create_vector_retriever(vector_store)
-    vector_ingestor = create_vector_ingestor(conn, vector_store)
+    vector_store = create_vector_store(conn=conn)
+    vector_retriever = create_vector_retriever(vector_store=vector_store, embedder=embedder)
+    vector_ingestor = create_vector_ingestor(conn=conn, vector_store=vector_store)
+
+    # sql
+    sql_store = create_sql_store(conn=conn)
+    sql_retriever = create_sql_retriever(guidance_retriever=guidance_retriever, llm=llm, sql_store=sql_store)
 
     # --- Pipelines ---
-    vector_ingestion = create_vector_ingestion(vector_ingestor)
-    vector_retrieval = create_vector_retrieval(vector_retriever)
-    sql_ingestion = create_sql_ingestion(conn=conn, llms=llms)
-    answer_pipeline = create_answer_pipeline(llm=llms["llm"])
+    vector_ingestion = create_vector_ingestion(vector_ingestor=vector_ingestor)
+    sql_ingestion = create_sql_ingestion(conn=conn, llm=llm)
+    answer_pipeline = create_answer_pipeline(llm=llm)
+    retrieval = create_retrieval_pipeline(vector_retriever=vector_retriever, sql_retriever=sql_retriever, routing_llm=llm)
 
     return MainPipeline(
         vector_ingestion=vector_ingestion,
         sql_ingestion=sql_ingestion,
-        vector_retriever=vector_retrieval,
         answer=answer_pipeline,
+        retrieval=retrieval
     )
 

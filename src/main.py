@@ -1,5 +1,6 @@
 from langchain_community.document_loaders import TextLoader, PyPDFLoader, Docx2txtLoader
 from langchain_core.messages import HumanMessage, AIMessage
+from sympy import true
 from src.services.user_service import create_user, user_login
 from src.bootstrap.bootstrap import create_app, create_vector_store
 from src.schema.schema import schema, system_user, schema
@@ -79,7 +80,7 @@ def main():
                     print("Exiting chat mode.\n")
                     break
 
-                test = True
+                test = true
 
                 answer = app.inference(
                     query=query,
