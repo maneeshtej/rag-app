@@ -1,8 +1,8 @@
-from typing import Dict, List
+import json
+import re
 from src.database.sql.sql_retriever import SQLRetriever
 from src.database.vector.vector_retriever import VectorRetriever
 from src.models.user import User
-from src.schema.schema import SCHEMA_MAP, SCHEMA_EXTENSION
 from langchain_core.documents import Document
 
 
@@ -10,14 +10,85 @@ class RetrievalPipeline:
     def __init__(
         self,
         vector_retriever: VectorRetriever,
-        sql_retriever: SQLRetriever
+        sql_retriever: SQLRetriever,
+        routing_llm
     ):
         self.vector_retriever = vector_retriever
         self.sql_retriever = sql_retriever
+        self.routing_llm = routing_llm
+
+    def _route_query(self, query: str) -> dict:
+        prompt = f"""
+            You are a query routing classifier.
+
+            Your task is to decide how strongly a user query should use:
+            1. SQL retrieval (structured, exact, database-style queries)
+            2. Vector retrieval (semantic, descriptive, explanatory queries)
+
+            IMPORTANT DATABASE CONTEXT:
+            - The SQL database ONLY contains:
+            faculty names,
+            department names,
+            subject names,
+            semester names,
+            and the relationships between them.
+            - ALL other information (user details, explanations, descriptions,
+            achievements, projects, narratives, definitions, and general knowledge)
+            exists ONLY in the vector store.
+
+            Return ONLY a valid JSON object.
+            Do NOT explain.
+            Do NOT add text.
+            Do NOT use markdown.
+            Do NOT repeat the query.
+
+            STRICT OUTPUT FORMAT (exact keys, nothing extra):
+            {{"sql_score":0.0,"vector_score":0.0}}
+
+            SCORING RULES:
+            - Give a HIGH sql_score ONLY if the query can be answered using:
+            faculty, departments, subjects, semesters, or their relationships.
+            - Give a HIGH vector_score if the query involves:
+            explanations, descriptions, achievements, projects, definitions,
+            general concepts, or any information NOT explicitly listed as SQL data.
+            - Scores must be between 0.0 and 1.0.
+            - Scores do NOT need to sum to 1.
+            - It is valid for BOTH scores to be high.
+
+            USER QUERY:
+"{query}"
+
+
+            """ 
+
+        response = self.routing_llm.invoke(prompt)
+        raw = response.content if hasattr(response, "content") else response
+
+        # extract first JSON only (defensive)
+        match = re.search(r"\{.*?\}", raw, re.DOTALL)
+        if not match:
+            # fail closed → SQL only
+            return {
+                "use_sql": True,
+                "use_vector": False,
+                "scores": {"sql_score": 1.0, "vector_score": 0.0},
+            }
+
+        scores = json.loads(match.group(0))
+
+        sql_score = float(scores.get("sql_score", 0))
+        vector_score = float(scores.get("vector_score", 0))
+
+        return {
+            "use_sql": sql_score >= 0.6,
+            "use_vector": vector_score >= 0.6,
+            "scores": scores,
+        }
+
 
     def _get_vector_results(
         self, query: str, user: User, k: int
-    ) -> List[Document]:
+    ) -> list[Document]:
         results =  self.vector_retriever.retrieve(
             query=query,
             user=user,
@@ -34,12 +105,9 @@ class RetrievalPipeline:
     def _get_sql_results(
             self, *, query:str, user:User, k:int
     ):
-        results = self.sql_retriever.retrieve(query=query, user=user, k=k)
+        results = self.sql_retriever.retrieve(query=query, user=user)
 
         print(f"""\n\nSQL Results\n\n""")
-
-        for result in results:
-            print(f"{[result.metadata.get('source'), result.metadata.get('table_name', 'vector'), result.metadata.get('similarity')]}")
 
         return results
 
@@ -55,3 +123,6 @@ class RetrievalPipeline:
             "vector": vector_chunks,
             "sql": sql_chunks
         }
+
+        # routing =  self._route_query(query=query)
+        # print(routing)

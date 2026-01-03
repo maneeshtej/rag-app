@@ -1,3 +1,4 @@
+from langchain_groq import ChatGroq
 from langchain_ollama import ChatOllama
 from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv
@@ -28,3 +29,10 @@ def create_qwen_llm():
     top_p=0.9,
     repeat_penalty=1.1,
 )
+
+def create_groq_llm():
+    load_dotenv()
+    return ChatGroq(
+            model="llama-3.1-8b-instant",
+            temperature=0
+        )

@@ -1,7 +1,5 @@
 import json
-from asyncpg import NullValueNotAllowedError
-from matplotlib import table
-from sympy import use
+import re
 from src.models.user import User
 from src.database.guidance.guidance_retriever import GuidanceRetriever
 from src.models.document import RuleChunk, SchemaChunk
@@ -53,21 +51,44 @@ class SQLRetriever:
 
             Your job is to perform STRUCTURAL NORMALIZATION only.
 
-            You must:
-            1. Identify the user’s high-level intent (list, exists, aggregate, or unknown).
-            2. Identify concrete entities mentioned in the query (for example: departments,
-            subjects, users, faculty).
-            3. For each entity, specify which tables and columns should be searched to resolve possible matches.
-            You MUST use ONLY columns explicitly listed under schema.entity_resolve_columns for that table.
-            If a table does NOT define entity_resolve_columns, you MUST NOT use that table for entity resolution.
-            If you dont find any suitable columns to search in do not mention the table in search targets.
-            You MUST NOT use identifier columns such as id, *_id, timestamps, or metadata fields unless they are explicitly listed in entity_resolve_columns.
-            4. Identify comparison expressions (>, <, >=, <=, =) and extract them
-            without binding them to any column.
+            Before doing anything else, you MUST decide whether the user query
+            is meaningfully answerable using the provided database schema.
+
+            - If the query is informational, conceptual, explanatory, or refers
+            to data NOT present in the schema, output EXACTLY:
+            {{ "skip": true }}
+
+            - If the query CAN be answered using the schema, continue with
+            structural normalization and output {{ "skip": false, ... }}.
+
+            You must perform the following ONLY if skip is false:
+
+            1. Identify the user’s high-level intent
+            (list, exists, aggregate, or unknown).
+
+            2. Identify concrete entities mentioned in the query
+            (for example: departments, subjects, users, faculty).
+
+            3. For each entity, specify which tables and columns should be searched
+            to resolve possible matches.
+            - You MUST use ONLY columns explicitly listed under
+                schema.entity_resolve_columns for that table.
+            - If a table does NOT define entity_resolve_columns,
+                you MUST NOT use that table for entity resolution.
+            - If no suitable columns exist, do NOT include that table.
+            - You MUST NOT use identifier columns such as id, *_id,
+                timestamps, or metadata fields unless explicitly listed.
+
+            4. Identify comparison expressions (>, <, >=, <=, =)
+            and extract them WITHOUT binding them to any column.
+
             5. Identify date or time expressions and normalize them into date ranges
-            without binding them to any table or column.
-            6. Split the query into independent sub-queries ONLY if the query explicitly
-            contains multiple standalone requests.
+            WITHOUT binding them to any table or column.
+
+            6. Identify whether the query contains multiple independent,
+            standalone requests.
+            - Split ONLY if each sub-query can stand alone and be answered independently.
+            - If splitting is not clearly justified, do NOT split.
 
             You are given:
             - The original user query
@@ -93,7 +114,17 @@ class SQLRetriever:
 
             OUTPUT FORMAT (JSON ONLY):
 
+            If the query is NOT suitable for database processing, output EXACTLY:
+
             {{
+            "skip": true
+            }}
+
+            Otherwise, output EXACTLY:
+
+            {{
+            "skip": false,
+
             "intent": {{
                 "type": "list | exists | aggregate | unknown"
             }},
@@ -134,15 +165,17 @@ class SQLRetriever:
             ]
             }}
 
-        STRICT OUTPUT RULES:
-        - Output MUST be valid JSON.
-        - Do NOT include comments, explanations, or annotations.
-        - Do NOT include markdown or code fences.
-        - Do NOT include text outside the JSON structure.
-        - Do NOT infer joins, aggregations, or SQL logic.
-        - Do NOT bind comparisons or dates to specific columns.
-        - If a section does not apply, output an empty array.
-        - Invalid JSON is a failure.
+            STRICT OUTPUT RULES:
+            - Output MUST be valid JSON.
+            - Output MUST be either {{ "skip": true }} OR the full normalized object.
+            - Do NOT mix skip with other fields.
+            - Do NOT include comments, explanations, or annotations.
+            - Do NOT include markdown or code fences.
+            - Do NOT infer joins, aggregations, or SQL logic.
+            - Do NOT bind comparisons or dates to specific columns.
+            - If a section does not apply, output an empty array.
+            - Invalid JSON is a failure.
+
         """
 
         print(f"Token count normalize: {len(prompt) // 4}\n\n")
@@ -172,9 +205,21 @@ class SQLRetriever:
         Returns a new normalized structure with resolved entities attached.
         """
 
+        # 1. If normalization explicitly says to skip SQL, do nothing
+        if normalized.get("skip") is True:
+            return {
+                **normalized,
+                "entities": []
+            }
+
         entities = normalized.get("entities", [])
+
+        # 2. No entities is a VALID state (e.g. aggregate-only queries)
         if not entities:
-            raise ValueError("No entities found in normalized query")
+            return {
+                **normalized,
+                "entities": []
+            }
 
         resolved_entities = []
 
@@ -182,7 +227,7 @@ class SQLRetriever:
             raw_value = entity.get("raw_value")
             search_targets = entity.get("search_targets", [])
 
-            # Skip entities without concrete value (e.g. result entity)
+            # 3. Entity exists but cannot be resolved (still valid)
             if not raw_value or not search_targets:
                 resolved_entities.append({
                     **entity,
@@ -194,13 +239,20 @@ class SQLRetriever:
             matches = []
 
             for target in search_targets:
+                columns = target.get("columns", [])
+
+                # 🚨 Skip invalid resolution targets
+                if not columns:
+                    continue
+
                 rows = self.sql_store.resolve_entity(
                     table=target["table"],
-                    columns=target["columns"],
+                    columns=columns,
                     value=raw_value,
                     k=3
                 )
                 matches.extend(rows)
+
 
             resolved_entities.append({
                 **entity,
@@ -218,10 +270,11 @@ class SQLRetriever:
         }
 
 
+
     
     def _generate_sql_object(self, *, query:str, resolved_output:dict, schema:dict):
         prompt = f"""
-        You are generating a SQL QUERY STRING for DEVELOPMENT PURPOSES ONLY.
+        You are generating SQL QUERY STRINGS for DEVELOPMENT PURPOSES ONLY.
 
         You are allowed to generate SQL text in this mode.
 
@@ -230,16 +283,26 @@ class SQLRetriever:
         - the normalized and resolved output
         - the available table schemas
 
-        into a VALID, EXECUTABLE SQL QUERY.
+        into VALID, EXECUTABLE SQL QUERY STRINGS.
+
+        Before doing anything else, you MUST check the normalized output:
+
+        - If the normalized output contains:
+        {{ "skip": true }}
+        then you MUST return EXACTLY:
+        []
+
+        - If skip is false, proceed with SQL generation.
 
         ====================
         WHAT YOU MUST DO
         ====================
 
-        1. Generate a SQL QUERY STRING (PostgreSQL dialect).
+        1. Generate SQL QUERY STRINGS (PostgreSQL dialect).
         2. Use ONLY the tables, columns, and joins provided in the schema.
         3. Do NOT invent tables, columns, joins, or filters.
-        4. If the normalized output contains `splits`, generate ONE SQL QUERY PER sub_query.
+        4. If the normalized output contains `splits`,
+        generate ONE SQL QUERY OBJECT PER sub_query.
         5. Select the MAXIMUM REASONABLE SET OF COLUMNS to produce rich results.
         - Prefer human-meaningful columns (names, titles, codes, timestamps).
         - Exclude pure identifiers unless required for joins or grouping.
@@ -250,6 +313,7 @@ class SQLRetriever:
         8. Use ONLY joins explicitly defined in the schema.
         9. ALL literal values MUST be parameterized using %s placeholders.
         - DO NOT inline values directly into SQL.
+        10. Generate SELECT queries ONLY.
 
         ====================
         INPUTS
@@ -280,32 +344,52 @@ class SQLRetriever:
         OUTPUT FORMAT
         ====================
 
-        Output VALID JSON ONLY.
+        You MUST output a JSON ARRAY.
 
-        If there are multiple sub_queries, output a JSON array.
-        If there is only one query, output a single JSON object.
+        - The FIRST character of the output MUST be '['
+        - The LAST character of the output MUST be ']'
+        - Even if there is only ONE SQL query, wrap it in an array.
+        - If no SQL should be generated, output EXACTLY: []
 
-        OUTPUT FORMAT:
+        OUTPUT FORMAT (EXACT):
 
-        {
+        [
+        {{ 
         "sql": "<SQL QUERY STRING>",
         "params": [
             "<param1>",
             "<param2>"
         ]
-        }
+        }}
+        ]
 
         ====================
         STRICT RULES
         ====================
 
-        - Output JSON ONLY
-        - No explanations
-        - No comments
-        - No markdown
-        - SQL MUST be parameterized
-        - No invented schema
-        - Invalid JSON is a failure
+        - You MUST output VALID JSON ONLY.
+        - The output MUST be a JSON ARRAY.
+        - The JSON ARRAY MUST be the ONLY content in the output.
+        - The output MUST start with '[' and end with ']'.
+        - Do NOT include any text before the JSON array.
+        - Do NOT include any text after the JSON array.
+        - Do NOT include explanations, reasoning, comments, annotations, or summaries.
+        - Do NOT include markdown, code fences, or formatting of any kind.
+        - If no SQL should be generated, output an EMPTY JSON ARRAY: [].
+        - SQL MUST be parameterized using %s placeholders.
+        - Do NOT invent tables, columns, joins, or filters.
+        - Generate SELECT statements ONLY.
+
+        ====================
+        SELF-CHECK (MANDATORY)
+        ====================
+
+        Before finalizing your output:
+        - Verify that the output is ONLY a JSON array.
+        - If you have included ANY non-JSON text,
+        DELETE IT and output ONLY the JSON array.
+
+        Any output that violates these rules is INVALID.
         """
 
         
@@ -328,50 +412,129 @@ class SQLRetriever:
             if text.lower().startswith("json"):
                 text = text[4:].strip()
 
-        return json.loads(text)
+        if not text:
+            return []
+
+        match = re.search(r"\[\s*\{.*?\}\s*\]", text, re.DOTALL)
+        if not match:
+            print("⚠️ No JSON array found in SQL LLM output")
+            return []
+
+        try:
+            parsed = json.loads(match.group(0))
+        except json.JSONDecodeError:
+            print("⚠️ SQL generation returned invalid JSON. Raw output:")
+            print(match.group(0))
+            return []
+
+        # Enforce list contract
+        if not isinstance(parsed, list):
+            print("⚠️ SQL generation did not return a list.")
+            return []
+
+        return parsed
+
+
+    
+    def _run_sql_objects(
+    self,
+    *,
+    sql_objects: list[dict],
+    limit: int = 100,
+    ) -> list[list[dict]]:
+        """
+        Executes a list of SQL objects produced by the SQL generator.
+
+        Returns:
+        - A list of result sets (one per SQL object)
+        """
+
+        results = []
+
+        for obj in sql_objects:
+            sql = obj.get("sql")
+            params = obj.get("params", [])
+
+            if not sql:
+                continue
+
+            rows = self.sql_store.execute_read(
+                sql=sql,
+                params=tuple(params),
+                limit=limit,
+            )
+
+            results.append(rows)
+
+        return results
+
         
 
 
 
 
     def retrieve(
-        self,
-        *,
-        query: str,
-        user: User,
-        rule_k: int = 5,
-        schema_k: int = 5,
+    self,
+    *,
+    query: str,
+    user: User,
+    rule_k: int = 5,
+    schema_k: int = 5,
     ) -> dict[str, list]:
-        """Converts natural language to SQL
-        
-        Keyword arguments:
-
-        - query -- user query 
-        - user -- user object
-        - rule_k -- number of rules
-        - schema_k -- number of tables
-
-        Return: returns rows from database
         """
+        Converts natural language to SQL objects.
 
-        rules_and_schema = self._get_rules_and_schema(query=query, user=user, rule_k=rule_k, schema_k=schema_k)
-        rules = rules_and_schema.get("rules")
-        schema = rules_and_schema.get("schema")
+        Returns:
+        - [] if query is not suitable for SQL
+        - list of SQL objects otherwise
+        """
+        rules_and_schema = self._get_rules_and_schema(
+            query=query,
+            user=user,
+            rule_k=rule_k,
+            schema_k=schema_k,
+        )
+        rules = rules_and_schema.get("rules", [])
+        schema = rules_and_schema.get("schema", [])
 
         print("Running normalization...")
-        normalized_result = self._normalize(query=query, rules=rules, schema=schema)
-        print("Running resolution...")
-        resolved_entities = self._resolve_entities(normalized=normalized_result)
-        print("Running sql object generation...")
-        sql_object = self._generate_sql_object(query=query, resolved_output=resolved_entities, schema=schema)
+        normalized_result = self._normalize(
+            query=query,
+            rules=rules,
+            schema=schema,
+        )
 
         print(normalized_result)
-        print("\n\n")
+        print("\n")
+
+        if normalized_result.get("skip") is True:
+            print("Skipping SQL generation (not DB-related query).")
+            return []
+
+        print("Running resolution...")
+        resolved_entities = self._resolve_entities(
+            normalized=normalized_result
+        )
 
         print(resolved_entities)
-        print("\n\n")
+        print("\n")
 
-        return sql_object
+        print("Running SQL object generation...")
+        sql_objects_list = self._generate_sql_object(
+            query=query,
+            resolved_output=resolved_entities,
+            schema=schema,
+        )
+
+        print(sql_objects_list)
+        print("\n")
+
+        print("Running SQL rows...")
+        sql_rows = self._run_sql_objects(sql_objects=sql_objects_list)
+        print(sql_rows)
+
+        return sql_rows
+
 
 
         

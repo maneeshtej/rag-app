@@ -1,10 +1,78 @@
+# Virtual environments
 .venv/
-__pycache__
+venv/
+env/
+ENV/
 
-test.ipynb
-test.txt
-test.png
-test.pdf
-test_long.pdf
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
 
+# Environment variables / secrets
+.env
+.env.*
+*.env
 
+# Jupyter / notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# Test & scratch files
+test.*
+*_test.*
+scratch.*
+debug.*
+
+# Data / documents (local experiments)
+*.txt
+*.csv
+*.tsv
+*.jsonl
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+
+# Model / vector / embedding artifacts
+*.bin
+*.pt
+*.pth
+*.onnx
+*.faiss
+*.index
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+log/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build / cache tools
+.cache/
+.mypy_cache/
+.pytest_cache/
+ruff_cache/
+
+# Coverage / reports
+.coverage
+htmlcov/
+coverage.xml
+
+# Downloads
+downloads/
+tmp/
+temp/
