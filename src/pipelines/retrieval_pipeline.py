@@ -104,11 +104,9 @@ class RetrievalPipeline:
     
     def _get_sql_results(
             self, *, query:str, user:User, k:int
-    ):
+    ) -> list[dict]:
         results = self.sql_retriever.retrieve(query=query, user=user)
-
         print(f"""\n\nSQL Results\n\n""")
-
         return results
 
 
@@ -119,10 +117,19 @@ class RetrievalPipeline:
         vector_chunks = self._get_vector_results(query, user, k)
         sql_chunks = self._get_sql_results(query=query, user=user, k=k)
 
-        return {
-            "vector": vector_chunks,
+        cleaned_vector_chunks = [
+            chunk.page_content for chunk in vector_chunks
+        ]
+
+
+
+        output = {
+            "vector": cleaned_vector_chunks,
             "sql": sql_chunks
         }
+
+        print(output)
+        return output
 
         # routing =  self._route_query(query=query)
         # print(routing)

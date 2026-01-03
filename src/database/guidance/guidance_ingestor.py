@@ -33,8 +33,8 @@ class GuidanceIngestor:
             )
 
         print("inserting rules...")
-        self.guidance_store.insert_rule_chunks(rule_chunks=rule_chunks)
-        return "success"
+        result = self.guidance_store.insert_rule_chunks(rule_chunks=rule_chunks)
+        return result
     
     def ingest_schema(self, *, rows:list[dict], truncate:bool = False) -> int:
 

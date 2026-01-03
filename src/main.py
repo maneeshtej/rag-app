@@ -2,9 +2,9 @@ from langchain_community.document_loaders import TextLoader, PyPDFLoader, Docx2t
 from langchain_core.messages import HumanMessage, AIMessage
 from sympy import true
 from src.services.user_service import create_user, user_login
-from src.bootstrap.bootstrap import create_app, create_vector_store
-from src.schema.schema import schema, system_user, schema
-from src.schema.setup_schema import schema_to_documents
+from src.bootstrap.bootstrap import create_app
+from src.schema.schema import SQL_SCHEMA_EMBEDDINGS, system_user
+from src.schema.hints_and_rules import rules
 
 def create_loader(path: str):
     if path.endswith(".txt"):
@@ -27,7 +27,7 @@ def main():
     print("  list          -> list all the uploaded files")
     print("  delete        -> delete a file with source")
     print("  exit          -> quit")
-    print("  update schema -> ingest SQL schema into vector store")
+    print("  update schema -> ingest SQL schema and rules into store")
 
     print("_" * 100)
 
@@ -80,7 +80,7 @@ def main():
                     print("Exiting chat mode.\n")
                     break
 
-                test = true
+                test = False
 
                 answer = app.inference(
                     query=query,
@@ -155,8 +155,7 @@ def main():
 
         elif cmd.lower() == "update schema":
 
-            docs = schema_to_documents(schema=schema, user=system_user)
-            result = app.ingest_schema(docs=docs)
+            result = app.ingest_schema(rules=rules, schema=SQL_SCHEMA_EMBEDDINGS, truncate=True)
 
             print("Schema ingestion completed.")
             print(result)

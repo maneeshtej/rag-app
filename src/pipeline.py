@@ -1,3 +1,4 @@
+from pydoc import doc
 from typing import List
 from langchain_core.documents import Document
 from src.models.user import User
@@ -10,11 +11,13 @@ class MainPipeline:
         sql_ingestion,
         retrieval,
         answer,
+        guidance_ingestor
     ):
         self.vector_ingestion = vector_ingestion
         self.sql_ingestion = sql_ingestion
         self.retrieval = retrieval
         self.answer = answer
+        self.guidance_ingestor = guidance_ingestor
 
     # ---------- INGESTION ----------
 
@@ -49,5 +52,18 @@ class MainPipeline:
 
         if test:
             return docs
+        
+        vector_docs = docs.get("vector")
+        sql_rows = docs.get("sql")
 
-        return self.answer.run(query, docs, chat_history)
+        return self.answer.run(query, vector_docs=vector_docs, sql_rows=sql_rows, chat_history=chat_history)
+    
+    def ingest_schema(self, *, rules:list[dict], schema:list[dict], truncate:bool=False) -> dict:
+        
+        rules_output = self.guidance_ingestor.ingest_hints(rows=rules, truncate=truncate)
+        schema_output = self.guidance_ingestor.ingest_schema(rows=schema, truncate=truncate)
+
+        return {
+            "rules": rules_output,
+            "schema": schema_output
+        }

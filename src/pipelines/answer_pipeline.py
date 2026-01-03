@@ -1,3 +1,4 @@
+from pydoc import doc
 from typing import List
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -5,16 +6,12 @@ from langchain_core.output_parsers import StrOutputParser
 
 
 class AnswerPipeline:
-    def __init__(self, llm, reranker=None, history_size=3, prompt=None):
+    def __init__(self, llm, history_size=3, prompt=None):
         self.llm = llm
-        self.reranker = reranker
         self.history_size= history_size
-        self.prompt = prompt or self.default_prompt()
+        self.prompt = prompt or self._default_prompt()
 
-    def set_reranker(self, reranker):
-        self.reranker = reranker
-
-    def default_prompt(self):
+    def _default_prompt(self):
         return ChatPromptTemplate.from_messages([
             (
                 "system",
@@ -41,22 +38,45 @@ class AnswerPipeline:
                 )
             ),
         ])
+    
+    def _build_context(
+    self,
+    *,
+    vector_docs: list[str],
+    sql_rows: list[dict],
+    ) -> str:
+        parts: list[str] = []
+
+        if sql_rows:
+            parts.append("DATABASE RESULTS:")
+            for row in sql_rows:
+                line = ", ".join(f"{k}: {v}" for k, v in row.items())
+                parts.append(f"- {line}")
+
+        if vector_docs:
+            parts.append("\nREFERENCE DOCUMENTS:")
+            for doc in vector_docs:
+                parts.append(doc)
+
+        return "\n".join(parts).strip()
+
 
     
-    def run(self, query:str, docs:List[Document], chat_history=None):
+    def run(self, query:str, vector_docs:list[str]=[], sql_rows:list[dict]=[], chat_history=None):
 
         chat_history = chat_history or []
 
-        if self.reranker:
-            docs = self.reranker.rerank(query, docs)
+        docs = self._build_context(vector_docs=vector_docs, sql_rows=sql_rows)
 
-        context = "\n\n".join(doc.page_content for doc in docs)
-
+        context = docs
         messages = self.prompt.format_messages(
             context=context,
             question=query,
             chat_history=chat_history
         )
+
+        print(f"token count inference: {len(messages) // 4}")
+        # print(messages)
 
         response = self.llm.invoke(messages)
 

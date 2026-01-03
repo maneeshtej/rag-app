@@ -31,7 +31,7 @@ class GuidanceRetriever:
     query: str,
     user: User,
     k: int = 5,
-) -> list[SchemaChunk]:
+    ) -> list[SchemaChunk]:
 
         query_embedding = self.embedder.embed_query(query)
 

@@ -38,12 +38,16 @@ class SQLRetriever:
             )
             print(f"name: {table.name} similarity: {sim}")
 
-        return {
-        "rules": [rule.to_dict() for rule in rules],
-        "schema": [chunk.to_dict() for chunk in schema],
-    }
+        result =  {
+        "rules":rules,
+        "schema": schema,
+        }
 
-    def _normalize(self, *, query:str, rules:dict, schema:dict) -> dict:
+        # print(result)
+
+        return result
+
+    def _normalize(self, *, query:str, rules:list[dict], schema:list[dict]) -> dict:
         prompt = f"""
             You are helping to prepare a database query.
 
@@ -179,6 +183,8 @@ class SQLRetriever:
         """
 
         print(f"Token count normalize: {len(prompt) // 4}\n\n")
+
+        print(prompt)
 
         response = self.llm.invoke(prompt)
         raw = response.content
@@ -441,15 +447,8 @@ class SQLRetriever:
     *,
     sql_objects: list[dict],
     limit: int = 100,
-    ) -> list[list[dict]]:
-        """
-        Executes a list of SQL objects produced by the SQL generator.
-
-        Returns:
-        - A list of result sets (one per SQL object)
-        """
-
-        results = []
+    ) -> list[dict]:
+        results: list[dict] = []
 
         for obj in sql_objects:
             sql = obj.get("sql")
@@ -464,14 +463,11 @@ class SQLRetriever:
                 limit=limit,
             )
 
-            results.append(rows)
+            results.append({
+                "rows": rows
+            })
 
         return results
-
-        
-
-
-
 
     def retrieve(
     self,
@@ -494,14 +490,17 @@ class SQLRetriever:
             rule_k=rule_k,
             schema_k=schema_k,
         )
-        rules = rules_and_schema.get("rules", [])
-        schema = rules_and_schema.get("schema", [])
+        rules:list[RuleChunk] = rules_and_schema.get("rules", [])
+        schema:list[SchemaChunk] = rules_and_schema.get("schema", [])
+
+        minimal_rules = [rule.to_minimal_dict() for rule in rules]
+        minmal_schema = [row.to_minimal_dict() for row in schema]
 
         print("Running normalization...")
         normalized_result = self._normalize(
             query=query,
-            rules=rules,
-            schema=schema,
+            rules=minimal_rules,
+            schema=minmal_schema,
         )
 
         print(normalized_result)

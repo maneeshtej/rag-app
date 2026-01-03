@@ -1,5 +1,7 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+from src.database.guidance import guidance_store
+from src.database.guidance.guidance_ingestor import GuidanceIngestor
 from src.database.llm import create_groq_llm
 from src.database.db import get_connection
 from src.database.guidance.guidance_retriever import GuidanceRetriever
@@ -78,6 +80,12 @@ def create_guidance_retriever(guidance_store, embedder):
         embedder=embedder
     )
 
+def create_guidance_ingestor(guidance_store, embedder):
+    return GuidanceIngestor(
+        guidance_store=guidance_store,
+        embedder=embedder
+    )
+
 
 
 # ---------- Pipeline factories ----------
@@ -126,6 +134,7 @@ def create_app() -> MainPipeline:
     # guidance
     guidance_store = create_guidance_store(conn=conn)
     guidance_retriever = create_guidance_retriever(guidance_store=guidance_store, embedder=embedder)
+    guidance_ingestor = create_guidance_ingestor(guidance_store=guidance_store, embedder=embedder)
 
     # --- Vector infra ---
     vector_store = create_vector_store(conn=conn)
@@ -146,6 +155,7 @@ def create_app() -> MainPipeline:
         vector_ingestion=vector_ingestion,
         sql_ingestion=sql_ingestion,
         answer=answer_pipeline,
-        retrieval=retrieval
+        retrieval=retrieval,
+        guidance_ingestor=guidance_ingestor
     )
 
