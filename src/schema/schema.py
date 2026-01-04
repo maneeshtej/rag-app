@@ -51,48 +51,6 @@ SQL_SCHEMA_EMBEDDINGS = [
     },
 
     {
-        "name": "faculty_projects",
-        "content": "",
-        "schema": {
-            "description": "Research or institutional projects undertaken by faculty",
-            "columns": {
-                "id": "project identifier",
-                "faculty_id": "faculty member leading the project",
-                "title": "project title",
-                "domain": "research or work domain",
-                "description": "project description",
-                "start_date": "project start date",
-                "end_date": "project end date if completed",
-                "created_at": "record creation time",
-                "status": "project status ongoing completed paused",
-            },
-            "joins": {
-                "faculty_id": "users.id",
-            },
-            "entity_resolve_columns": ["title", "domain"]
-        },
-        "related_tables": [
-            "users",
-        ],
-        "embedding_text": """
-            faculty projects faculty research projects academic projects institutional projects
-
-            faculty research work research domains research areas
-            ai projects networks projects education projects interdisciplinary research
-
-            ongoing projects completed projects paused projects
-            projects without end date active research work
-
-            faculty wise projects projects by faculty
-            principal investigator co investigator
-            department research projects university research projects college research
-
-            research output faculty achievements
-            long term academic initiatives project timeline project duration
-""",
-    },
-
-    {
         "name": "faculty_subjects",
         "content": "",
         "schema": {
@@ -326,7 +284,6 @@ SQL_SCHEMA_EMBEDDINGS = [
             },
             "joins": {
                 "id": [
-                    "faculty_projects.faculty_id",
                     "faculty_subjects.faculty_id",
                     "files.owner_id",
                 ],
@@ -334,7 +291,6 @@ SQL_SCHEMA_EMBEDDINGS = [
             "entity_resolve_columns": ["username", "role"]
         },
         "related_tables": [
-            "faculty_projects",
             "faculty_subjects",
             "files",
         ],
@@ -378,22 +334,7 @@ department events department wise events
 subject events subject wise events
 semester events semester wise events
 """
-    ,"faculty_projects": """
-    faculty projects faculty research projects academic projects institutional projects
 
-faculty research work research domains research areas
-ai projects networks projects education projects interdisciplinary research
-
-ongoing projects completed projects paused projects
-projects without end date active research work
-
-faculty wise projects projects by faculty
-principal investigator co investigator
-department research projects university research projects college research
-
-research output faculty achievements
-long term academic initiatives project timeline project duration
-"""
     ,"faculty_subjects": """
     faculty subjects teaching assignments subject allocation faculty allocation
 

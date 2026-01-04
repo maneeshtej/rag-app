@@ -117,14 +117,14 @@ class RetrievalPipeline:
         vector_chunks = self._get_vector_results(query, user, k)
         sql_chunks = self._get_sql_results(query=query, user=user, k=k)
 
-        cleaned_vector_chunks = [
-            chunk.page_content for chunk in vector_chunks
-        ]
+        # cleaned_vector_chunks = [
+        #     chunk.page_content for chunk in vector_chunks
+        # ]
 
 
 
         output = {
-            "vector": cleaned_vector_chunks,
+            "vector": vector_chunks,
             "sql": sql_chunks
         }
 

@@ -16,7 +16,6 @@ from src.database.guidance.guidance_store import GuidanceStore
 
 from src.pipelines.retrieval_pipeline import RetrievalPipeline
 from src.pipelines.vector_ingestion import VectorIngestion
-from src.pipelines.vector_retrieval import VectorRetrieval
 from src.pipelines.answer_pipeline import AnswerPipeline
 from src.pipelines.sql_ingestion import SQLIngestion
 from src.pipeline import MainPipeline
@@ -94,12 +93,6 @@ def create_vector_ingestion(vector_ingestor):
     return VectorIngestion(
         splitter=create_text_splitter(),
         ingestor=vector_ingestor,
-    )
-
-
-def create_vector_retrieval(vector_retriever):
-    return VectorRetrieval(
-        retriever=vector_retriever,
     )
 
 

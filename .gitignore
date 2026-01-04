@@ -76,3 +76,7 @@ coverage.xml
 downloads/
 tmp/
 temp/
+
+# Depreciated
+
+depreciated/

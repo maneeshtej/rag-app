@@ -32,6 +32,16 @@ class MainPipeline:
             raise ValueError("SQL ingestion is not configured")
 
         return self.sql_ingestion.run(path, user)
+    
+    def ingest_schema(self, *, rules:list[dict], schema:list[dict], truncate:bool=False) -> dict:
+        
+        rules_output = self.guidance_ingestor.ingest_hints(rows=rules, truncate=truncate)
+        schema_output = self.guidance_ingestor.ingest_schema(rows=schema, truncate=truncate)
+
+        return {
+            "rules": rules_output,
+            "schema": schema_output
+        }
 
     # ---------- INFERENCE ----------
 
@@ -57,13 +67,4 @@ class MainPipeline:
         sql_rows = docs.get("sql")
 
         return self.answer.run(query, vector_docs=vector_docs, sql_rows=sql_rows, chat_history=chat_history)
-    
-    def ingest_schema(self, *, rules:list[dict], schema:list[dict], truncate:bool=False) -> dict:
-        
-        rules_output = self.guidance_ingestor.ingest_hints(rows=rules, truncate=truncate)
-        schema_output = self.guidance_ingestor.ingest_schema(rows=schema, truncate=truncate)
 
-        return {
-            "rules": rules_output,
-            "schema": schema_output
-        }
