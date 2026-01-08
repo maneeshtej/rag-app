@@ -52,128 +52,145 @@ class SQLRetriever:
         prompt = f"""
             You are helping to prepare a database query.
 
-            Your job is NOT to write SQL.
+Your job is NOT to write SQL.
 
-            Your job is to perform STRUCTURAL NORMALIZATION only.
+Your job is to perform STRUCTURAL NORMALIZATION only.
 
-            Before doing anything else, you MUST decide whether the user query
-            is meaningfully answerable using the provided database schema.
+Before doing anything else, you MUST decide whether the user query
+is meaningfully answerable using the provided database schema.
 
-            - If the query is informational, conceptual, explanatory, or refers
-            to data NOT present in the schema, output EXACTLY:
-            {{ "skip": true }}
+- If the query is informational, conceptual, explanatory, or refers
+  to data NOT present in the schema, output EXACTLY:
+  { "skip": true }
 
-            - If the query CAN be answered using the schema, continue with
-            structural normalization and output {{ "skip": false, ... }}.
+- If the query CAN be answered using the schema, continue with
+  structural normalization and output { "skip": false, ... }.
 
-            You must perform the following ONLY if skip is false:
+You must perform the following ONLY if skip is false:
 
-            1. Identify the user’s high-level intent
-            (list, exists, aggregate, or unknown).
+1. Identify the user’s high-level intent.
+   Allowed values:
+   - "list"
+   - "exists"
+   - "aggregate"
+   - "unknown"
 
-            2. Identify concrete entities mentioned in the query
-            (for example: departments, subjects, users, faculty).
+2. Identify concrete entities mentioned in the query.
+   Examples include (but are not limited to):
+   - faculty
+   - subject
+   - department
+   - event
+   - other
 
-            3. Identify which database tables are relevant to answering the query.
-            - Output ONLY table names.
-            - Do NOT output column names.
-            - Do NOT infer joins, filters, or conditions.
-            - If no tables are clearly relevant, leave the table list empty.
+   For each entity:
+   - Extract the entity_type.
+   - Extract the raw_value EXACTLY as it appears in the user query.
+   - Do NOT resolve entities.
+   - Do NOT infer canonical IDs.
+   - Do NOT infer columns or search targets.
 
+3. Identify which database tables are relevant to answering the query.
+   - Output ONLY table names.
+   - Do NOT output column names.
+   - Do NOT infer joins, filters, or conditions.
+   - This list is advisory and may be empty.
 
-            4. Identify comparison expressions (>, <, >=, <=, =)
-            and extract them WITHOUT binding them to any column.
+4. Identify comparison expressions (>, <, >=, <=, =)
+   and extract them WITHOUT binding them to any column.
 
-            5. Identify date or time expressions and normalize them into date ranges
-            WITHOUT binding them to any table or column.
+5. Identify date or time expressions and normalize them into date ranges
+   WITHOUT binding them to any table or column.
 
-            6. Identify whether the query contains multiple independent,
-            standalone requests.
-            - Split ONLY if each sub-query can stand alone and be answered independently.
-            - If splitting is not clearly justified, do NOT split.
+6. Identify whether the query contains multiple independent,
+   standalone requests.
+   - Split ONLY if each sub-query can stand alone and be answered independently.
+   - If splitting is not clearly justified, do NOT split.
 
-            You are given:
-            - The original user query
-            - Retrieved rules (hints about what structures may exist)
-            - Retrieved schema (available tables and columns)
+You are given:
+- The original user query
+- Retrieved rules (hints about what structures may exist)
+- Retrieved schema (available tables and high-level descriptions)
 
-            Rules are hints, NOT commands.
-            Use ONLY the schema provided.
-            Do NOT invent tables or columns.
+Rules are hints, NOT commands.
+Use ONLY the schema provided.
+Do NOT invent tables or columns.
 
-            ----------------------------------
-            USER QUERY:
-            {query}
-            ----------------------------------
+----------------------------------
+USER QUERY:
+{query}
+----------------------------------
 
-            RETRIEVED RULE HINTS:
-            {json.dumps(rules, indent=2, default=str)}
-            ----------------------------------
+RETRIEVED RULE HINTS:
+{json.dumps(rules, indent=2, default=str)}
+----------------------------------
 
-            AVAILABLE SCHEMA:
-            {json.dumps(schema, indent=2, default=str)}
-            ----------------------------------
+AVAILABLE SCHEMA:
+{json.dumps(schema, indent=2, default=str)}
+----------------------------------
 
-            OUTPUT FORMAT (JSON ONLY):
+OUTPUT FORMAT (JSON ONLY):
 
-            If the query is NOT suitable for database processing, output EXACTLY:
+If the query is NOT suitable for database processing, output EXACTLY:
 
-            {{
-            "skip": true
-            }}
+{{
+  "skip": true
+}}
 
-            Otherwise, output EXACTLY:
+Otherwise, output EXACTLY:
 
-            {{
-            "skip": false,
+{{
+  "skip": false,
 
-            "intent": {{
-                "type": "list | exists | aggregate | unknown"
-            }},
+  "intent": {{
+    "type": "list | exists | aggregate | unknown"
+  }},
 
-            "tables": ["subjects | faculty"],
+  "tables": [
+    "<table_name>",
+    "<table_name>"
+  ],
 
-            "entities": [
-                {{
-                    "entity_type": "department | subject | faculty | other",
-                    "raw_value": "<value exactly as in the query>"
-                }}
-            ]
+  "entities": [
+    {{
+      "entity_type": "department | subject | faculty | event | other",
+      "raw_value": "<value exactly as in the query>"
+    }}
+  ],
 
+  "comparisons": [
+    {{
+      "operator": ">|<|>=|<=|=",
+      "value": "<number or literal>",
+      "raw_text": "<original phrase from the query>"
+    }}
+  ],
 
-            "comparisons": [
-                {{
-                "operator": ">|<|>=|<=|=",
-                "value": "<number or literal>",
-                "raw_text": "<original phrase from the query>"
-                }}
-            ],
+  "date_constraints": [
+    {{
+      "start_date": "<YYYY-MM-DD or null>",
+      "end_date": "<YYYY-MM-DD or null>",
+      "raw_text": "<original phrase from the query>"
+    }}
+  ],
 
-            "date_constraints": [
-                {{
-                "start_date": "<YYYY-MM-DD or null>",
-                "end_date": "<YYYY-MM-DD or null>",
-                "raw_text": "<original phrase from the query>"
-                }}
-            ],
+  "splits": [
+    {{
+      "sub_query": "<standalone sub-query text>"
+    }}
+  ]
+}}
 
-            "splits": [
-                {{
-                "sub_query": "<standalone sub-query text>"
-                }}
-            ]
-            }}
-
-            STRICT OUTPUT RULES:
-            - Output MUST be valid JSON.
-            - Output MUST be either {{ "skip": true }} OR the full normalized object.
-            - Do NOT mix skip with other fields.
-            - Do NOT include comments, explanations, or annotations.
-            - Do NOT include markdown or code fences.
-            - Do NOT infer joins, aggregations, or SQL logic.
-            - Do NOT bind comparisons or dates to specific columns.
-            - If a section does not apply, output an empty array.
-            - Invalid JSON is a failure.
+STRICT OUTPUT RULES:
+- Output MUST be valid JSON.
+- Output MUST be either {{ "skip": true }} OR the full normalized object.
+- Do NOT mix skip with other fields.
+- Do NOT include comments, explanations, or annotations.
+- Do NOT include markdown or code fences.
+- Do NOT infer joins, aggregations, or SQL logic.
+- Do NOT bind comparisons or dates to specific columns.
+- If a section does not apply, output an empty array.
+- Invalid JSON is a failure.
 
         """
 
