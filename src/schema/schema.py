@@ -3,7 +3,7 @@ from src.models.user import User
 SQL_SCHEMA_EMBEDDINGS = [
     {
         "name": "events",
-        "content": "",            # placeholder (human-readable later)
+        "content": "", 
         "schema": {
             "description": "Academic and administrative events with time windows",
             "columns": {
@@ -51,34 +51,34 @@ SQL_SCHEMA_EMBEDDINGS = [
     },
 
     {
-        "name": "faculty_subjects",
-        "content": "",
-        "schema": {
-            "description": "Teaching assignments mapping faculty to subjects per semester",
-            "columns": {
-                "id": "teaching assignment identifier",
-                "faculty_id": "faculty teaching the subject",
-                "subject_id": "subject being taught",
-                "semester_id": "semester of teaching",
-                "department_id": "department offering the subject",
-                "created_at": "record creation time",
-            },
-            "joins": {
-                "faculty_id": "users.id",
-                "subject_id": "subjects.id",
-                "semester_id": "semesters.id",
-                "department_id": "departments.id",
-            },
-            "entity_resolve_columns": []
+    "name": "faculty_subjects",
+    "content": "",
+    "schema": {
+        "description": "Teaching assignments mapping faculty to subjects per semester",
+        "columns": {
+            "id": "teaching assignment identifier",
+            "faculty_id": "faculty teaching the subject",
+            "subject_id": "subject being taught",
+            "semester_id": "semester of teaching",
+            "department_id": "department offering the subject",
+            "created_at": "record creation time"
         },
-        "related_tables": [
-            "users",
-            "subjects",
-            "semesters",
-            "departments",
-        ],
-        "embedding_text": """
-         faculty subjects teaching assignments subject allocation faculty allocation
+        "joins": {
+            "faculty_id": "faculty.id",
+            "subject_id": "subjects.id",
+            "semester_id": "semesters.id",
+            "department_id": "departments.id"
+        },
+        "entity_resolve_columns": []
+    },
+    "related_tables": [
+        "faculty",
+        "subjects",
+        "semesters",
+        "departments"
+    ],
+    "embedding_text": """
+        faculty subjects teaching assignments subject allocation faculty allocation
 
         subjects taught by faculty who teaches a subject
         faculty wise subject allocation subject wise faculty
@@ -90,8 +90,9 @@ SQL_SCHEMA_EMBEDDINGS = [
 
         faculty workload teaching load per faculty
         timetable generation teaching schedule class allocation
-""",
-    },
+    """
+}
+,
 
     {
         "name": "departments",
@@ -133,49 +134,6 @@ SQL_SCHEMA_EMBEDDINGS = [
         department events department activities
 
         university departments college departments
-""",
-    },
-
-    {
-        "name": "files",
-        "content": "",
-        "schema": {
-            "description": "Metadata for uploaded or ingested documents",
-            "columns": {
-                "id": "file identifier",
-                "owner_id": "user who uploaded the file",
-                "role": "role of the uploader",
-                "source": "original file name or source",
-                "access_level": "file access control level",
-                "created_at": "file upload time",
-            },
-            "joins": {
-                "owner_id": "users.id",
-                "id": [
-                    "events.file_id",
-                    "vector_chunks.file_id",
-                ],
-            },
-            "entity_resolve_columns": ["role", "source"]
-        },
-        "related_tables": [
-            "users",
-            "events",
-        ],
-        "embedding_text": """
-        files documents uploads uploaded files file metadata document metadata
-
-        who uploaded a file files uploaded by user
-        recently uploaded files file owner ownership
-
-        document source source file original file
-        files ingested documents ingested
-
-        file access access level access control permissions
-        files accessible by role admin faculty files
-
-        events generated from file derived from file
-        vector chunks from file document provenance
 """,
     },
 
@@ -271,46 +229,46 @@ SQL_SCHEMA_EMBEDDINGS = [
     },
 
     {
-        "name": "users",
-        "content": "",
-        "schema": {
-            "description": "System users such as faculty and administrators",
-            "columns": {
-                "id": "user identifier",
-                "username": "login or display name",
-                "role": "user role such as faculty or admin",
-                "access_level": "numeric authorization level",
-                "created_at": "account creation time",
-            },
-            "joins": {
-                "id": [
-                    "faculty_subjects.faculty_id",
-                    "files.owner_id",
-                ],
-            },
-            "entity_resolve_columns": ["username", "role"]
+    "name": "faculty",
+    "content": "",
+    "schema": {
+        "description": "Academic faculty members of the institution",
+        "columns": {
+            "id": "faculty identifier",
+            "name": "full name of faculty member",
+            "designation": "academic designation",
+            "email": "official email address",
+            "contact_no": "contact number",
+            "joining_date": "date of joining",
+            "experience_years": "total teaching or industry experience",
+            "created_at": "record creation time",
+            "updated_at": "last record update time"
         },
-        "related_tables": [
-            "faculty_subjects",
-            "files",
-        ],
-        "embedding_text": """
-            users user accounts system users
-
-            faculty users admin users administrators
-            users by role find users by role
-
-            user access access level authorization permissions
-            role based access control
-
-            faculty members teaching faculty research faculty
-            projects owned by faculty subjects taught by faculty
-
-            files uploaded by user file owner ownership
-
-            list users user profiles user details
-""",
+        "joins": {
+            "id": [
+                "faculty_subjects.faculty_id"
+            ]
+        },
+        "entity_resolve_columns": ["name", "email", "designation"]
     },
+    "related_tables": [
+        "faculty_subjects"
+    ],
+
+    "embedding_text": """
+        faculty academic staff teaching staff professors lecturers
+
+        faculty profiles academic background experience qualifications
+
+        faculty subjects taught teaching assignments courses handled
+
+        faculty research interests achievements sponsored projects
+
+        department faculty academic department teaching staff
+
+        list faculty find professors lecturers instructors
+    """
+}
 ]
 
 

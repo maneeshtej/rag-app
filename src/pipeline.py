@@ -8,28 +8,29 @@ class MainPipeline:
     def __init__(
         self,
         vector_ingestion,
-        sql_ingestion,
         retrieval,
         answer,
-        guidance_ingestor
+        guidance_ingestor,
+        scrape_ingestion
+
     ):
         self.vector_ingestion = vector_ingestion
-        self.sql_ingestion = sql_ingestion
         self.retrieval = retrieval
         self.answer = answer
         self.guidance_ingestor = guidance_ingestor
+        self.scrape_ingestion = scrape_ingestion
 
     # ---------- INGESTION ----------
 
     def ingest_vector(self, loader, user: User):
         if not self.vector_ingestion:
-            raise ValueError("Vector ingestion is not configured")
+            raise ValueError("Vector scrape_ingestion is not configured")
 
         return self.vector_ingestion.run(loader, user)
 
     def ingest_sql(self, path: str, user: User):
         if not self.sql_ingestion:
-            raise ValueError("SQL ingestion is not configured")
+            raise ValueError("SQL scrape_ingestion is not configured")
 
         return self.sql_ingestion.run(path, user)
     
@@ -42,6 +43,11 @@ class MainPipeline:
             "rules": rules_output,
             "schema": schema_output
         }
+    
+    def ingest_faculty_profiles(self, *, profiles:list[dict], dept_name:str, user:User, truncate: bool = False):
+        if truncate:
+            self.scrape_ingestion.truncate_tables(tables=["faculty", "faculty_subjects", "subjects"])
+        return self.scrape_ingestion.ingest_faculty_profiles(profiles=profiles, dept_name=dept_name, user=user)
 
     # ---------- INFERENCE ----------
 

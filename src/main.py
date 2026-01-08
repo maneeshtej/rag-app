@@ -1,11 +1,13 @@
 from langchain_community.document_loaders import TextLoader, PyPDFLoader, Docx2txtLoader
 from langchain_core.messages import HumanMessage, AIMessage
-from sympy import true
+from src.database.db import get_connection
+from src.services.scrape_service import parse_faculty_from_url
 from src.services.user_service import create_user, user_login
 from src.bootstrap.bootstrap import create_app
 from src.schema.schema import SQL_SCHEMA_EMBEDDINGS, system_user
 from src.schema.hints_and_rules import rules
 
+conn = get_connection()
 def create_loader(path: str):
     if path.endswith(".txt"):
         return TextLoader(path)
@@ -111,7 +113,7 @@ def main():
                 print("No user set. Run `create` first.\n")
                 continue
 
-            ingest_type = input("ingest type (vector/sql): ").strip().lower()
+            ingest_type = input("ingest type (vector/sql/faculty): ").strip().lower()
 
             if ingest_type == "vector":
                 filepath = input("filepath: ").strip()
@@ -136,8 +138,26 @@ def main():
                 print("SQL ingestion completed.")
                 print(result)
 
+            elif ingest_type == "faculty":
+                profiles = parse_faculty_from_url("https://nitte.edu.in/nmit/btech-computer-science-engineering.php")
+                try:
+                    result = app.ingest_faculty_profiles(
+                        profiles=profiles,
+                        dept_name="Computer Science and Engineering",
+                        user=system_user,
+                        truncate=True
+                    )
+                    conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    print(e)
+                    
+
+                print(result)
+                print("ingestion completed")
+
             else:
-                print("Invalid ingest type. Choose `vector` or `sql`.")
+                print("Invalid ingest type. Choose `vector` or `sql` or `faculty`.")
 
 
         elif cmd.lower() == "delete":
@@ -154,8 +174,12 @@ def main():
             print(output)
 
         elif cmd.lower() == "update schema":
-
-            result = app.ingest_schema(rules=rules, schema=SQL_SCHEMA_EMBEDDINGS, truncate=True)
+            try:
+                result = app.ingest_schema(rules=rules, schema=SQL_SCHEMA_EMBEDDINGS, truncate=True)
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                print(e)
 
             print("Schema ingestion completed.")
             print(result)

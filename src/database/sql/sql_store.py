@@ -69,3 +69,40 @@ class SQLStore:
             dict(zip(colnames, row))
             for row in rows
         ]
+    
+    def execute_write(self, sql: str, params: tuple | None = None):
+        cur = self.conn.cursor()
+        cur.execute(sql, params or ())
+        if "returning" in sql.lower():
+            row = cur.fetchone()
+            cur.close()
+            return row[0]
+        rc = cur.rowcount
+        cur.close()
+        return rc
+
+    def truncate_tables(self, tables: list[str]):
+        """
+        Truncate given tables with CASCADE.
+        Intended for dev/reset use only.
+        """
+
+        if not tables:
+            return
+
+        # basic safety: only allow simple identifiers
+        for t in tables:
+            if not t.replace("_", "").isalnum():
+                raise ValueError(f"Invalid table name: {t}")
+
+        table_list = ", ".join(tables)
+        sql = f"TRUNCATE TABLE {table_list} CASCADE;"
+
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(sql)
+            self.conn.commit()
+        except Exception as e:
+            self.conn.rollback()
+            raise RuntimeError(e)
+

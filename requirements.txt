@@ -39,6 +39,7 @@ pillow
 opencv-python
 transformers
 sentencepiece
+beautifulsoup4
 
 
 

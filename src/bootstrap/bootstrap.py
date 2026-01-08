@@ -5,6 +5,7 @@ from src.database.guidance.guidance_ingestor import GuidanceIngestor
 from src.database.llm import create_groq_llm
 from src.database.db import get_connection
 from src.database.guidance.guidance_retriever import GuidanceRetriever
+from src.database.sql.sql_ingestion import SQLIngester
 from src.database.sql.sql_retriever import SQLRetriever
 from src.database.sql.sql_store import SQLStore
 from src.database.vector.vector_ingestor import VectorIngestor
@@ -15,6 +16,7 @@ from src.database.dependencies import create_embedder
 from src.database.guidance.guidance_store import GuidanceStore
 
 from src.pipelines.retrieval_pipeline import RetrievalPipeline
+from src.pipelines.scrape_ingestion_pipeline import ScrapeIngestionPipeline
 from src.pipelines.vector_ingestion import VectorIngestion
 from src.pipelines.answer_pipeline import AnswerPipeline
 from src.pipelines.sql_ingestion import SQLIngestion
@@ -73,6 +75,9 @@ def create_sql_retriever(guidance_retriever, sql_store, llm):
         llm=llm
     )
 
+def create_sql_ingestor(sql_store):
+    return SQLIngester(sql_store=sql_store)
+
 def create_guidance_retriever(guidance_store, embedder):
     return GuidanceRetriever(
         guidance_store=guidance_store,
@@ -116,6 +121,13 @@ def create_retrieval_pipeline(vector_retriever, sql_retriever, routing_llm):
         routing_llm=routing_llm
     )
 
+def create_scrape_ingestion_pipeline(sql_ingestor, sql_retriever, vector_ingestor):
+    return ScrapeIngestionPipeline(
+        sql_ingester=sql_ingestor,
+        sql_retriever=sql_retriever,
+        vector_ingestor=vector_ingestor
+    )
+
 
 # ---------- App wiring ----------
 
@@ -137,16 +149,17 @@ def create_app() -> MainPipeline:
     # sql
     sql_store = create_sql_store(conn=conn)
     sql_retriever = create_sql_retriever(guidance_retriever=guidance_retriever, llm=llm, sql_store=sql_store)
+    sql_ingestor = create_sql_ingestor(sql_store=sql_store)
 
     # --- Pipelines ---
     vector_ingestion = create_vector_ingestion(vector_ingestor=vector_ingestor)
-    sql_ingestion = create_sql_ingestion(conn=conn, llm=llm)
     answer_pipeline = create_answer_pipeline(llm=llm)
     retrieval = create_retrieval_pipeline(vector_retriever=vector_retriever, sql_retriever=sql_retriever, routing_llm=llm)
+    scrape_ingestion = create_scrape_ingestion_pipeline(sql_ingestor=sql_ingestor, sql_retriever=sql_retriever, vector_ingestor=vector_ingestor)
 
     return MainPipeline(
         vector_ingestion=vector_ingestion,
-        sql_ingestion=sql_ingestion,
+        scrape_ingestion=scrape_ingestion,
         answer=answer_pipeline,
         retrieval=retrieval,
         guidance_ingestor=guidance_ingestor

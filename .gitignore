@@ -36,6 +36,7 @@ debug.*
 *.jpeg
 *.gif
 *.svg
+page.html
 
 # Model / vector / embedding artifacts
 *.bin

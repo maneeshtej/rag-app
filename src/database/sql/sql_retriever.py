@@ -135,7 +135,7 @@ class SQLRetriever:
 
             "entities": [
                 {{
-                "entity_type": "department | subject | user | faculty | other",
+                "entity_type": "department | subject | faculty | other",
                 "raw_value": "<value exactly as in the query>",
                 "search_targets": [
                     {{
@@ -533,6 +533,30 @@ class SQLRetriever:
         print(sql_rows)
 
         return sql_rows
+    
+    def get_row(
+        self,
+        *,
+        table: str,
+        where: dict,
+    ) -> dict | None:
+        """
+        Fetch a single row from a table using equality filters.
+        """
+        if not where:
+            raise ValueError("where cannot be empty")
+
+        conditions = " AND ".join(f"{k} = %s" for k in where)
+        sql = f"SELECT * FROM {table} WHERE {conditions} LIMIT 1"
+
+        rows = self.sql_store.execute_read(
+            sql=sql,
+            params=tuple(where.values()),
+            limit=1,
+        )
+
+        return rows[0] if rows else None
+
 
 
 

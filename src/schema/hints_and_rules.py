@@ -99,57 +99,45 @@ rules: list[dict] = [
   """
 },
 {
-  "name": "user_realisation",
+  "name": "faculty_realisation",
   "type": "rule",
   "priority": 0,
   "content": """
-  Whenever the user query refers to people associated with the institution,
-  explicitly extract the referenced people as user-related entities.
+  Whenever the user query refers to teaching staff or academic personnel,
+  explicitly extract the referenced people as faculty-related entities.
 
-  User-indicating words include, but are not limited to:
-  user, users,
-  faculty, faculty member, professor, lecturer, teacher,
-  staff, employee,
-  student, students,
-  admin, administrator.
+  Faculty-indicating words include, but are not limited to:
+  faculty, faculty member, professor, lecturer, teacher, teaching staff.
 
-  If the query implies a role-based group (for example, "faculty members",
-  "teachers", or "students") rather than a specific name, the entity MUST
-  still be extracted with the appropriate role inferred.
+  If the query implies a role-based group (for example, \"faculty members\",
+  \"teachers\", or \"professors\") rather than a specific name, the entity MUST
+  still be extracted as a faculty entity.
 
-  If a specific person name is mentioned, it MUST be extracted exactly
-  as written in the query as a user entity.
+  If a specific faculty name is mentioned, it MUST be extracted exactly
+  as written in the query as a faculty entity.
 
-  Do not treat user or faculty references as plain text filters.
-  They must be resolved later to canonical user representations
-  (such as user_id, username, or role-based user sets).
+  Faculty references MUST be resolved to canonical faculty representations
+  stored in the faculty table (such as faculty_id or faculty.name).
+
+  Do NOT map faculty references to generic users unless explicitly requested.
   """,
-
   "embedding": """
-  faculty members
   faculty
+  faculty members
   professors
   professor
   lecturers
   teachers
   teaching staff
-  staff members
-  employees
-  users
-  user list
-  students
-  student
-  admin users
-  administrators
   who teaches
   who teaches subject
   list faculty
   list teachers
+  faculty teaching subject
   faculty working in department
-  users from department
-  list user and user working 
   """
 },
+
 {
   "name": "comparison_realisation",
   "type": "rule",

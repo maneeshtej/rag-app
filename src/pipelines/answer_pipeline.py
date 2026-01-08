@@ -1,8 +1,6 @@
-from pydoc import doc
-from typing import List
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.output_parsers import StrOutputParser
+
 
 
 class AnswerPipeline:
@@ -40,10 +38,10 @@ class AnswerPipeline:
         ])
     
     def _build_context(
-    self,
-    *,
-    vector_docs: list[str],
-    sql_rows: list[dict],
+        self,
+        *,
+        vector_docs: list[Document],
+        sql_rows: list[dict],
     ) -> str:
         parts: list[str] = []
 
@@ -55,14 +53,16 @@ class AnswerPipeline:
 
         if vector_docs:
             parts.append("\nREFERENCE DOCUMENTS:")
-            for doc in vector_docs:
-                parts.append(doc)
+            for i, doc in enumerate(vector_docs, 1):
+                parts.append(f"[Doc {i}]")
+                parts.append(doc.page_content)
 
         return "\n".join(parts).strip()
 
 
+
     
-    def run(self, query:str, vector_docs:list[str]=[], sql_rows:list[dict]=[], chat_history=None):
+    def run(self, query:str, vector_docs:list[Document]=[], sql_rows:list[dict]=[], chat_history=None):
 
         chat_history = chat_history or []
 
