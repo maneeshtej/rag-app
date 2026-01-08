@@ -30,7 +30,6 @@ class RetrievalPipeline:
             faculty names,
             department names,
             subject names,
-            semester names,
             and the relationships between them.
             - ALL other information (user details, explanations, descriptions,
             achievements, projects, narratives, definitions, and general knowledge)
@@ -47,7 +46,7 @@ class RetrievalPipeline:
 
             SCORING RULES:
             - Give a HIGH sql_score ONLY if the query can be answered using:
-            faculty, departments, subjects, semesters, or their relationships.
+            faculty, departments, subjects, or their relationships.
             - Give a HIGH vector_score if the query involves:
             explanations, descriptions, achievements, projects, definitions,
             general concepts, or any information NOT explicitly listed as SQL data.

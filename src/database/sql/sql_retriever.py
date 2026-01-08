@@ -6,10 +6,11 @@ from src.models.document import RuleChunk, SchemaChunk
 
 
 class SQLRetriever:
-    def __init__(self, *, guidance_retriever: GuidanceRetriever, llm, sql_store):
+    def __init__(self, *, guidance_retriever: GuidanceRetriever, llm, sql_store, embedder):
         self.guidance_retriever = guidance_retriever
         self.llm = llm
         self.sql_store = sql_store
+        self.embedder = embedder
 
     def _get_rules_and_schema(self, *, query:str, user:User, rule_k:int, schema_k:int) -> dict:
         rules: list[RuleChunk] = self.guidance_retriever.retrieve_query(
@@ -73,15 +74,12 @@ class SQLRetriever:
             2. Identify concrete entities mentioned in the query
             (for example: departments, subjects, users, faculty).
 
-            3. For each entity, specify which tables and columns should be searched
-            to resolve possible matches.
-            - You MUST use ONLY columns explicitly listed under
-                schema.entity_resolve_columns for that table.
-            - If a table does NOT define entity_resolve_columns,
-                you MUST NOT use that table for entity resolution.
-            - If no suitable columns exist, do NOT include that table.
-            - You MUST NOT use identifier columns such as id, *_id,
-                timestamps, or metadata fields unless explicitly listed.
+            3. Identify which database tables are relevant to answering the query.
+            - Output ONLY table names.
+            - Do NOT output column names.
+            - Do NOT infer joins, filters, or conditions.
+            - If no tables are clearly relevant, leave the table list empty.
+
 
             4. Identify comparison expressions (>, <, >=, <=, =)
             and extract them WITHOUT binding them to any column.
@@ -133,18 +131,15 @@ class SQLRetriever:
                 "type": "list | exists | aggregate | unknown"
             }},
 
+            "tables": ["subjects | faculty"],
+
             "entities": [
                 {{
-                "entity_type": "department | subject | faculty | other",
-                "raw_value": "<value exactly as in the query>",
-                "search_targets": [
-                    {{
-                    "table": "<table_name>",
-                    "columns": ["<column1>", "<column2>"]
-                    }}
-                ]
+                    "entity_type": "department | subject | faculty | other",
+                    "raw_value": "<value exactly as in the query>"
                 }}
-            ],
+            ]
+
 
             "comparisons": [
                 {{
@@ -205,62 +200,89 @@ class SQLRetriever:
 
         return json.loads(text)
     
-    def _resolve_entities(self, normalized: dict) -> dict:
+    def _resolve_single_entity(
+        self,
+        *,
+        entity_type: str,
+        query: str,
+        k: int = 3,
+        max_distance: float = 0.8,
+    ) -> list[dict]:
         """
-        Resolves entities in a normalized query structure.
-        Returns a new normalized structure with resolved entities attached.
+        Resolve entities using vector search over entity_embeddings
+        and return canonical rows from source tables.
         """
 
-        # 1. If normalization explicitly says to skip SQL, do nothing
+        query_vec = self.embedder.embed_query(query)
+
+        if entity_type == "faculty":
+            join_sql = "JOIN faculty f ON f.id = e.entity_id"
+            select_cols = """
+                e.entity_id,
+                f.name,
+                f.designation,
+                f.email,
+                e.surface_form,
+                e.embedding <-> %s::vector AS distance
+            """
+        elif entity_type == "subject":
+            join_sql = "JOIN subjects s ON s.id = e.entity_id"
+            select_cols = """
+                e.entity_id,
+                s.name,
+                e.surface_form,
+                e.embedding <-> %s::vector AS distance
+            """
+        else:
+            return []
+
+        sql = f"""
+            SELECT
+                x.*
+            FROM (
+                SELECT DISTINCT ON (e.entity_id)
+                    {select_cols}
+                FROM entity_embeddings e
+                {join_sql}
+                WHERE e.entity_type = %s
+                ORDER BY e.entity_id, distance
+            ) x
+            ORDER BY x.distance
+        """
+
+        rows = self.sql_store.execute_read(
+            sql=sql,
+            params=(query_vec, entity_type),
+            limit=k
+        )
+
+        # hard safety gate — reject garbage matches
+        return [r for r in rows if r["distance"] is not None and r["distance"] < max_distance]
+    
+    def _resolve_entities(self, *, normalized: dict) -> dict:
         if normalized.get("skip") is True:
-            return {
-                **normalized,
-                "entities": []
-            }
+            return {**normalized, "entities": []}
 
-        entities = normalized.get("entities", [])
+        resolved_output = []
 
-        # 2. No entities is a VALID state (e.g. aggregate-only queries)
-        if not entities:
-            return {
-                **normalized,
-                "entities": []
-            }
-
-        resolved_entities = []
-
-        for entity in entities:
+        for entity in normalized.get("entities", []):
+            entity_type = entity.get("entity_type")
             raw_value = entity.get("raw_value")
-            search_targets = entity.get("search_targets", [])
 
-            # 3. Entity exists but cannot be resolved (still valid)
-            if not raw_value or not search_targets:
-                resolved_entities.append({
+            if not entity_type or not raw_value:
+                resolved_output.append({
                     **entity,
                     "resolved": [],
-                    "resolution_confidence": "none"
+                    "resolution_confidence": "none",
                 })
                 continue
 
-            matches = []
+            matches = self._resolve_single_entity(
+                entity_type=entity_type,
+                query=raw_value,
+            )
 
-            for target in search_targets:
-                columns = target.get("columns", [])
-
-                # 🚨 Skip invalid resolution targets
-                if not columns:
-                    continue
-
-                rows = self.sql_store.resolve_entity(
-                    table=target["table"],
-                    columns=columns,
-                    value=raw_value,
-                    k=3
-                )
-                matches.extend(rows)
-
-
-            resolved_entities.append({
+            resolved_output.append({
                 **entity,
                 "resolved": matches,
                 "resolution_confidence": (
@@ -272,8 +294,10 @@ class SQLRetriever:
 
         return {
             **normalized,
-            "entities": resolved_entities
+            "entities": resolved_output,
         }
+
+
 
 
 
@@ -342,7 +366,7 @@ class SQLRetriever:
         - table name
         - column descriptions
         - join relationships
-        - entity resolve columns
+        - table purpose and relationsips
 
         These schemas are authoritative.
 
@@ -511,17 +535,18 @@ class SQLRetriever:
             return []
 
         print("Running resolution...")
-        resolved_entities = self._resolve_entities(
+        resolved_output = self._resolve_entities(
             normalized=normalized_result
         )
 
-        print(resolved_entities)
+
+        print(resolved_output)
         print("\n")
 
         print("Running SQL object generation...")
         sql_objects_list = self._generate_sql_object(
             query=query,
-            resolved_output=resolved_entities,
+            resolved_output=resolved_output,
             schema=schema,
         )
 

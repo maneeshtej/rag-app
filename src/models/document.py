@@ -89,8 +89,4 @@ class SchemaChunk:
         return {
             "table": self.name,
             "description": schema.get("description", ""),
-            "entity_resolve_columns": schema.get(
-                "entity_resolve_columns",
-                []
-            ),
         }
