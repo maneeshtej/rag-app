@@ -68,11 +68,12 @@ def create_sql_store(conn):
     )
 
 
-def create_sql_retriever(guidance_retriever, sql_store, llm):
+def create_sql_retriever(guidance_retriever, sql_store, llm, embedder):
     return SQLRetriever(
         guidance_retriever=guidance_retriever,
         sql_store=sql_store,
-        llm=llm
+        llm=llm,
+        embedder=embedder
     )
 
 def create_sql_ingestor(sql_store):
@@ -121,11 +122,12 @@ def create_retrieval_pipeline(vector_retriever, sql_retriever, routing_llm):
         routing_llm=routing_llm
     )
 
-def create_scrape_ingestion_pipeline(sql_ingestor, sql_retriever, vector_ingestor):
+def create_scrape_ingestion_pipeline(sql_ingestor, sql_retriever, vector_ingestor, embedder):
     return ScrapeIngestionPipeline(
         sql_ingester=sql_ingestor,
         sql_retriever=sql_retriever,
-        vector_ingestor=vector_ingestor
+        vector_ingestor=vector_ingestor,
+        embedder=embedder
     )
 
 
@@ -148,14 +150,14 @@ def create_app() -> MainPipeline:
 
     # sql
     sql_store = create_sql_store(conn=conn)
-    sql_retriever = create_sql_retriever(guidance_retriever=guidance_retriever, llm=llm, sql_store=sql_store)
+    sql_retriever = create_sql_retriever(guidance_retriever=guidance_retriever, llm=llm, sql_store=sql_store, embedder=embedder)
     sql_ingestor = create_sql_ingestor(sql_store=sql_store)
 
     # --- Pipelines ---
     vector_ingestion = create_vector_ingestion(vector_ingestor=vector_ingestor)
     answer_pipeline = create_answer_pipeline(llm=llm)
     retrieval = create_retrieval_pipeline(vector_retriever=vector_retriever, sql_retriever=sql_retriever, routing_llm=llm)
-    scrape_ingestion = create_scrape_ingestion_pipeline(sql_ingestor=sql_ingestor, sql_retriever=sql_retriever, vector_ingestor=vector_ingestor)
+    scrape_ingestion = create_scrape_ingestion_pipeline(sql_ingestor=sql_ingestor, sql_retriever=sql_retriever, vector_ingestor=vector_ingestor, embedder=embedder)
 
     return MainPipeline(
         vector_ingestion=vector_ingestion,

@@ -61,10 +61,10 @@ is meaningfully answerable using the provided database schema.
 
 - If the query is informational, conceptual, explanatory, or refers
   to data NOT present in the schema, output EXACTLY:
-  { "skip": true }
+  {{ "skip": true }}
 
 - If the query CAN be answered using the schema, continue with
-  structural normalization and output { "skip": false, ... }.
+  structural normalization and output {{ "skip": false, ... }}.
 
 You must perform the following ONLY if skip is false:
 
