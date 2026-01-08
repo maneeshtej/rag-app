@@ -274,7 +274,8 @@ STRICT OUTPUT RULES:
         )
 
         # hard safety gate — reject garbage matches
-        return [r for r in rows if r["distance"] is not None and r["distance"] < max_distance]
+        return [r for r in rows if r["distance"] is not None]
+
     
     def _resolve_entities(self, *, normalized: dict) -> dict:
         if normalized.get("skip") is True:

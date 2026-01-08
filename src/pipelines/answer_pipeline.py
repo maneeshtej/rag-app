@@ -9,35 +9,74 @@ class AnswerPipeline:
         self.history_size= history_size
         self.prompt = prompt or self._default_prompt()
 
+    def _build_context(
+        self,
+        *,
+        vector_docs: list[Document],
+        sql_rows: list[dict],
+    ) -> str:
+        parts = []
+
+        if sql_rows:
+            parts.append("DATABASE RESULTS:")
+            for row in sql_rows:
+                parts.append(
+                    "- " + ", ".join(f"{k}: {v}" for k, v in row.items())
+                )
+
+        if vector_docs:
+            parts.append("\nREFERENCE DOCUMENTS:")
+            for i, doc in enumerate(vector_docs, 1):
+                parts.append(f"[Doc {i}] {doc.page_content}")
+
+        return "\n".join(parts).strip()
+
+
     def _default_prompt(self):
         return ChatPromptTemplate.from_messages([
             (
                 "system",
-                ("""
-                    You are a strict retrieval-based assistant.
+                """
+    You are a STRICT answer-generation assistant.
 
-            Rules you MUST follow:
+    You are given:
+    - DATABASE RESULTS (structured, authoritative)
+    - REFERENCE DOCUMENTS (unstructured text)
 
-            1. Use ONLY the information provided in the Context.
-            2. You MAY summarize, rephrase, or format the information into clear natural language.
-            3. Do NOT use prior knowledge or assumptions beyond the Context.
+    Your job is to decide WHICH source can correctly answer the question,
+    and produce the final answer.
 
-            DATABASE RESULTS RULES:
-            4. If DATABASE RESULTS are present and contain rows:
-            - Treat them as authoritative.
-            - Answer the question using those rows.
-            - Present the answer in clear, human-readable English.
-            5. If DATABASE RESULTS are empty but reference documents are present:
-            - Answer using the reference documents.
-            6. If BOTH DATABASE RESULTS and reference documents are empty:
-            - Respond exactly with: "I don't know."
+    SELECTION RULES (MANDATORY):
 
-            OUTPUT RULES:
-            7. Do NOT explain your reasoning.
-            8. Do NOT mention SQL, databases, or documents.
-            9. Do NOT add information not present in the Context.
-            """
-                )
+    1. If DATABASE RESULTS are present AND they directly answer the question:
+    - Use ONLY DATABASE RESULTS
+    - Ignore reference documents completely
+
+    2. If DATABASE RESULTS are present BUT do NOT answer the question:
+    - Ignore them
+    - Use REFERENCE DOCUMENTS if relevant
+
+    3. If DATABASE RESULTS are empty AND reference documents contain relevant information:
+    - Answer using reference documents
+
+    4. If NEITHER source can answer the question:
+    - Respond EXACTLY with: "I don't know."
+
+    CONTENT RULES (STRICT):
+
+    - Use ONLY the provided context
+    - Do NOT use prior knowledge
+    - Do NOT infer missing facts
+    - Do NOT explain your reasoning
+    - Do NOT mention databases, SQL, vectors, or documents
+    - Produce clear, direct, human-readable answers
+
+    FORMAT RULES:
+
+    - If listing items, use bullet points
+    - If a single fact, use a single sentence
+    - No preambles, no disclaimers
+    """
             ),
             MessagesPlaceholder(variable_name="chat_history"),
             (
@@ -50,30 +89,7 @@ class AnswerPipeline:
                 )
             ),
         ])
-    
-    def _build_context(
-        self,
-        *,
-        vector_docs: list[Document],
-        sql_rows: list[dict],
-    ) -> str:
-        parts: list[str] = []
 
-        if sql_rows:
-            if sql_rows:
-                parts.append("DATABASE RESULTS:")
-
-            for row in sql_rows:
-                line = ", ".join(f"{k}: {v}" for k, v in row.items())
-                parts.append(f"- {line}")
-
-        if vector_docs:
-            parts.append("\nREFERENCE DOCUMENTS:")
-            for i, doc in enumerate(vector_docs, 1):
-                parts.append(f"[Doc {i}]")
-                parts.append(doc.page_content)
-
-        return "\n".join(parts).strip()
 
 
 
@@ -85,17 +101,8 @@ class AnswerPipeline:
         sql_rows: list[dict] = [],
         chat_history=None,
     ):
-        # 🔒 SQL-FIRST RULE
-        if sql_rows:
-            # Flatten rows safely
-            if isinstance(sql_rows, list) and isinstance(sql_rows[0], dict):
-                return "\n".join(
-                    "- " + ", ".join(str(v) for v in row.values())
-                    for row in sql_rows
-                )
-
-        # fallback to RAG
         chat_history = chat_history or []
+
         context = self._build_context(
             vector_docs=vector_docs,
             sql_rows=sql_rows,
@@ -109,6 +116,7 @@ class AnswerPipeline:
 
         response = self.llm.invoke(messages)
         return response.content
+
 
 
     

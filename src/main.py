@@ -91,7 +91,7 @@ def main():
                     test=test
                 )
 
-                print(f"assistant> {answer}\n")
+                print(f"\n\n\n\nassistant> {answer}\n")
                 if not test:
                     chat_history.append(HumanMessage(content=query))
                     chat_history.append(AIMessage(content=answer))
