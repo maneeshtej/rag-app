@@ -1,214 +1,290 @@
 from src.models.user import User
 
-SQL_SCHEMA_EMBEDDINGS = [
+schema = [
     {
         "name": "events",
-        "content": "", 
-        "schema": {
-            "description": "Academic and administrative events with time windows",
-            "columns": {
-                "id": "unique event identifier",
-                "title": "event title",
-                "event_type": "type of event such as exam holiday notice assignment",
-                "start_time": "event start date and time",
-                "end_time": "event end date and time",
-                "department_id": "department related to the event",
-                "subject_id": "subject related to the event",
-                "file_id": "source document for the event",
-                "metadata": "additional event information",
-            },
-            "joins": {
-                "department_id": "departments.id",
-                "subject_id": "subjects.id",
-                "file_id": "files.id",
-            },
-            "entity_resolve_columns": ["title", "event_type"]
-        },
-        "related_tables": [
-            "departments",
-            "subjects",
-            "files",
-        ],
-        "embedding_text": """
-            academic events administrative events university events college events
+        "type": "schema_guidance",
+        "priority": 3,
+        "active": True,
 
-            exam schedule exam dates mid exam end exam internal exam
-            assignment deadlines submissions due dates
-            holiday list public holidays academic holidays
-            notices announcements circulars schedule changes
+        "content": """
+        This guidance defines the EVENTS table.
 
-            academic calendar calendar timetable
-            upcoming events events this week events this month events 
-            events between dates important events
+        Use this table when the user asks about academic or administrative events that occur within a time window.
 
-            department events department wise events
-            subject events subject wise events
-""",      # placeholder (what you actually embed)
-    },
+        EVENTS represent:
+        - exams, assignments, holidays, notices, announcements, circulars
+        - academic calendar entries
+        - department-wise or subject-wise scheduled activities
+        - upcoming, ongoing, or past events bounded by start_time and end_time
 
+        Columns:
+        - id: unique identifier of the event
+        - title: name or heading of the event
+        - event_type: category such as exam, holiday, assignment, notice, announcement
+        - start_time: datetime when the event starts
+        - end_time: datetime when the event ends
+        - department_id: link to departments table
+        - subject_id: link to subjects table
+        - file_id: source document reference
+        - metadata: additional structured or unstructured details
+
+        Joins:
+        - events.department_id → departments.id
+        - events.subject_id → subjects.id
+        - events.file_id → files.id
+
+        Filtering rules:
+        - Use start_time and end_time for date range queries
+        - Filter by department_id for department-specific events
+        - Filter by subject_id for subject-specific events
+        - event_type is used to distinguish exams, holidays, assignments, and notices
+        """,
+
+            "embedding_text": """
+        events table academic events administrative events university events college events
+
+        exam schedule exam dates mid semester exam end semester exam internal exam external exam
+        assignment deadline assignment submission due date last date to submit
+        holiday list public holiday academic holiday university holiday
+        notices announcements circulars official notice schedule update reschedule cancellation
+
+        academic calendar timetable semester calendar important dates
+        upcoming events ongoing events past events
+        events today events this week events this month
+        events between dates events in date range
+
+        department wise events department specific notices
+        subject wise events subject related exams assignments
+        events related to a department events related to a subject
+
+        when is the exam
+        what events are coming up
+        show upcoming academic events
+        list holidays this month
+        what assignments are due
+        events for a specific department
+        events for a specific subject
+        """
+    }
+    ,
     {
-    "name": "faculty_subjects",
-    "content": "",
-    "schema": {
-        "description": "Teaching assignments mapping faculty to subjects",
-        "columns": {
-            "id": "teaching assignment identifier",
-            "faculty_id": "faculty teaching the subject",
-            "subject_id": "subject being taught",
-            "department_id": "department offering the subject",
-            "created_at": "record creation time"
-        },
-        "joins": {
-            "faculty_id": "faculty.id",
-            "subject_id": "subjects.id",
-            "department_id": "departments.id"
-        },
-        "entity_resolve_columns": []
-    },
-    "related_tables": [
-        "faculty",
-        "subjects",
-        "departments"
-    ],
-    "embedding_text": """
-        faculty subjects teaching assignments subject allocation faculty allocation
+        "name": "faculty_subjects",
+        "type": "schema_guidance",
+        "priority": 3,
+        "active": True,
 
-        subjects taught by faculty who teaches a subject
-        faculty wise subject allocation subject wise faculty
+        "content": """
+        This guidance defines the FACULTY_SUBJECTS table.
 
-        department wise teaching assignments department teaching subjects
+        Use this table when the user asks about which faculty teaches which subject, or about teaching assignments.
 
-        faculty workload teaching load per faculty
-        timetable generation teaching schedule class allocation
-    """
-}
-,
+        FACULTY_SUBJECTS represents the mapping between faculty members and the subjects they teach.
 
+        Each row corresponds to one teaching assignment.
+
+        Columns:
+        - id: unique teaching assignment identifier
+        - faculty_id: reference to the faculty member
+        - subject_id: reference to the subject being taught
+        - department_id: department offering the subject
+        - created_at: timestamp when the assignment was created
+
+        Joins:
+        - faculty_subjects.faculty_id → faculty.id
+        - faculty_subjects.subject_id → subjects.id
+        - faculty_subjects.department_id → departments.id
+
+        Usage rules:
+        - Use faculty_id to fetch subjects taught by a faculty member
+        - Use subject_id to fetch faculty teaching a subject
+        - Use department_id for department-wise teaching assignments
+        - This table does NOT contain timetable or class session timing information
+        """,
+
+            "embedding_text": """
+        faculty subjects table teaching assignments faculty subject mapping
+
+        who teaches which subject
+        subjects taught by a faculty
+        faculty teaching a subject
+        faculty wise subject allocation
+        subject wise faculty allocation
+
+        department wise teaching assignments
+        department faculty subject mapping
+        subjects offered by a department and faculty
+
+        faculty workload teaching load
+        number of subjects per faculty
+        faculty allocation for subjects
+
+        teaching assignment data
+        faculty subject relationship
+        which faculty handles a subject
+        """
+    }
+    ,
     {
         "name": "departments",
-        "content": "",
-        "schema": {
-            "description": "Academic departments or branches",
-            "columns": {
-                "id": "department identifier",
-                "name": "full department name",
-                "short_code": "abbreviated department code",
-                "aliases": "alternative department names",
-            },
-            "joins": {
-                "id": [
-                    "events.department_id",
-                    "faculty_subjects.department_id",
-                    "subjects.department_id",
-                ],
-            },
-            "entity_resolve_columns": ["name", "short_code", "aliases"]
-        },
-        "related_tables": [
-            "events",
-            "faculty_subjects",
-            "subjects",
-        ],
-        "embedding_text": """
-        academic departments departments branch branches academic units
+        "type": "schema_guidance",
+        "priority": 4,
+        "active": True,
 
-        cse ece mechanical civil it electrical electronics computer science
-        department names department codes department short codes aliases
+        "content": """
+        This guidance defines the DEPARTMENTS table.
 
-        list of departments how many departments
-        department wise data department wise information
+        Use this table when the user asks about academic departments, branches, or organizational units.
 
-        department faculty department subjects department 
-        department events department activities
+        DEPARTMENTS represents academic units such as CSE, ECE, Mechanical, Civil, IT, etc.
 
-        university departments college departments
-""",
-    },
+        Columns:
+        - id: unique department identifier
+        - name: full department name
+        - short_code: abbreviated department code
+        - aliases: alternative or informal names for the department
 
-    
+        Joins:
+        - departments.id → events.department_id
+        - departments.id → faculty_subjects.department_id
+        - departments.id → subjects.department_id
 
+        Usage rules:
+        - Resolve departments using name, short_code, or aliases
+        - Use department id as the root filter for department-wise queries
+        - Departments act as a parent entity for subjects, faculty assignments, and events
+        """,
+
+            "embedding_text": """
+        departments table academic departments branches academic units
+
+        cse ece it civil mechanical electrical electronics computer science
+        department names department codes short codes aliases
+
+        list of departments
+        how many departments
+        show all departments
+        department information
+
+        department wise data
+        department wise subjects
+        department wise faculty
+        department wise events
+        department activities
+
+        college departments university departments
+        branch wise information
+        """
+    }
+    ,
     {
         "name": "subjects",
-        "content": "",
-        "schema": {
-            "description": "Academic subjects or courses in a curriculum",
-            "columns": {
-                "id": "subject identifier",
-                "code": "official subject code",
-                "name": "subject name",
-                "department_id": "department offering the subject",
-                "credits": "credit structure of the subject",
-            },
-            "joins": {
-                "department_id": "departments.id",
-                "id": [
-                    "events.subject_id",
-                    "faculty_subjects.subject_id",
-                ],
-            },
-            "entity_resolve_columns": ["code", "name"]
-        },
-        "related_tables": [
-            "departments",
-            "events",
-            "faculty_subjects",
-        ],
-        "embedding_text": """
-        subjects courses academic subjects courses offered curriculum course catalog
+        "type": "schema_guidance",
+        "priority": 4,
+        "active": True,
 
-        subjects offered by department department subjects
+        "content": """
+        This guidance defines the SUBJECTS table.
 
-        course codes subject codes course names
-        credit structure course credits
+        Use this table when the user asks about academic subjects or courses offered as part of a curriculum.
 
-        which faculty teaches a subject subject faculty mapping
-        subjects taught by faculty
+        SUBJECTS represents individual courses such as Data Structures, Operating Systems, DBMS, etc.
 
-        subjects related to events subject wise events
-""",
-    },
+        Columns:
+        - id: unique subject identifier
+        - code: official subject or course code
+        - name: subject name
+        - department_id: department offering the subject
+        - credits: credit structure of the subject
 
+        Joins:
+        - subjects.department_id → departments.id
+        - subjects.id → events.subject_id
+        - subjects.id → faculty_subjects.subject_id
+
+        Usage rules:
+        - Resolve subjects using subject code or subject name
+        - Use department_id for department-wise subject queries
+        - Use subject id to fetch related faculty assignments or subject-specific events
+        - SUBJECTS does not store faculty or event timing information directly
+        """,
+
+            "embedding_text": """
+        subjects table academic subjects courses course catalog curriculum
+
+        course code subject code
+        course name subject name
+        credits credit structure credit count
+
+        subjects offered by department
+        department wise subjects
+        courses offered by a department
+
+        which faculty teaches a subject
+        subject faculty mapping
+        faculty for a subject
+
+        subject wise events
+        events related to a subject
+        exams assignments notices for a subject
+
+        list of subjects
+        show all subjects
+        """
+    }
+    ,
     {
-    "name": "faculty",
-    "content": "",
-    "schema": {
-        "description": "Academic faculty members of the institution",
-        "columns": {
-            "id": "faculty identifier",
-            "name": "full name of faculty member",
-            "designation": "academic designation",
-            "email": "official email address",
-            "contact_no": "contact number",
-            "joining_date": "date of joining",
-            "experience_years": "total teaching or industry experience",
-            "created_at": "record creation time",
-            "updated_at": "last record update time"
-        },
-        "joins": {
-            "id": [
-                "faculty_subjects.faculty_id"
-            ]
-        },
-        "entity_resolve_columns": ["name", "email", "designation"]
-    },
-    "related_tables": [
-        "faculty_subjects"
-    ],
+        "name": "faculty",
+        "type": "schema_guidance",
+        "priority": 4,
+        "active": True,
 
-    "embedding_text": """
-        faculty academic staff teaching staff professors lecturers
+        "content": """
+        This guidance defines the FACULTY table.
 
-        faculty profiles academic background experience qualifications
+        Use this table when the user asks about academic faculty members, instructors, professors, or teaching staff.
 
-        faculty subjects taught teaching assignments courses handled
+        FACULTY represents individual academic staff profiles of the institution.
 
-        faculty research interests achievements sponsored projects
+        Columns:
+        - id: unique faculty identifier
+        - name: full name of the faculty member
+        - designation: academic designation or role
+        - email: official email address
+        - contact_no: contact phone number
+        - joining_date: date when the faculty joined the institution
+        - experience_years: total academic or industry experience
+        - created_at: record creation timestamp
+        - updated_at: record last update timestamp
 
-        department faculty academic department teaching staff
+        Joins:
+        - faculty.id → faculty_subjects.faculty_id
 
-        list faculty find professors lecturers instructors
-    """
-}
+        Usage rules:
+        - Resolve faculty entities using name, email, or designation
+        - Use faculty id to fetch subjects taught via faculty_subjects
+        - FACULTY does not directly store subject, department, or event data
+        """,
+
+            "embedding_text": """
+        faculty table academic faculty teaching staff professors lecturers instructors
+
+        faculty profile faculty details
+        faculty name designation email contact
+        faculty experience years joining date
+
+        which subjects does a faculty teach
+        subjects taught by faculty
+        faculty subject mapping
+
+        list faculty
+        find faculty member
+        search professor lecturer instructor
+
+        department faculty
+        academic staff information
+        """
+    }
 ]
 
 

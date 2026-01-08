@@ -2,6 +2,7 @@ from pydoc import doc
 from typing import List
 from langchain_core.documents import Document
 from src.models.user import User
+from src.schema import realisation_rules
 
 
 class MainPipeline:
@@ -34,15 +35,36 @@ class MainPipeline:
 
         return self.sql_ingestion.run(path, user)
     
-    def ingest_schema(self, *, rules:list[dict], schema:list[dict], truncate:bool=False) -> dict:
+    def ingest_schema(
+        self,
+        *,
+        realisation_rules: list[dict],
+        schema: list[dict],
+        generate_rules: list[dict],
+        truncate:bool = False
+    ) -> dict:
         
-        rules_output = self.guidance_ingestor.ingest_hints(rows=rules, truncate=truncate)
-        schema_output = self.guidance_ingestor.ingest_schema(rows=schema, truncate=truncate)
+        if truncate:
+            self.guidance_ingestor.truncate()
+
+        rule_items = self.guidance_ingestor.ingest(
+            rules=realisation_rules
+        )
+
+        schema_items = self.guidance_ingestor.ingest(
+            rules=schema
+        )
+
+        generate_items = self.guidance_ingestor.ingest(
+            rules=generate_rules
+        )
 
         return {
-            "rules": rules_output,
-            "schema": schema_output
+            "rules": rule_items,
+            "schema": schema_items,
+            "generate": generate_items
         }
+
     
     def ingest_faculty_profiles(self, *, profiles:list[dict], dept_name:str, user:User, truncate: bool = False):
         if truncate:

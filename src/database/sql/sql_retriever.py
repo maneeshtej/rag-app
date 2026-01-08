@@ -1,197 +1,143 @@
 import json
 import re
+from src.models.guidance import GuidanceIngest
 from src.models.user import User
 from src.database.guidance.guidance_retriever import GuidanceRetriever
-from src.models.document import RuleChunk, SchemaChunk
 
 
 class SQLRetriever:
-    def __init__(self, *, guidance_retriever: GuidanceRetriever, llm, sql_store, embedder):
+    def __init__(self, *, guidance_retriever:GuidanceRetriever, llm, sql_store, embedder):
         self.guidance_retriever = guidance_retriever
         self.llm = llm
         self.sql_store = sql_store
         self.embedder = embedder
 
-    def _get_rules_and_schema(self, *, query:str, user:User, rule_k:int, schema_k:int) -> dict:
-        rules: list[RuleChunk] = self.guidance_retriever.retrieve_query(
+    def _get_rules_and_schema(
+        self,
+        *,
+        query: str,
+        user: User,
+        rule_k: int,
+        schema_k: int,
+    ) -> dict:
+        rules: list[GuidanceIngest] = self.guidance_retriever.retrieve(
             query=query,
-            user=user,
-            type="rule",
-            k=rule_k,
+            type="realisation_rules"
         )
 
         print("list of rules fetched:")
         for rule in rules:
-            print(f"rule: {rule.name} similarity: {rule.similarity}")
+            print(
+                f"rule: {rule.name} "
+                f"distance: {getattr(rule, 'distance', None)}"
+            )
 
-        schema: list[SchemaChunk] = self.guidance_retriever.retrieve_schema(
+        schema: list[GuidanceIngest] = self.guidance_retriever.retrieve(
             query=query,
-            user=user,
-            k=schema_k,
+            type="schema_guidance"
         )
 
-        print("list of tables:")
+        print("list of schema fetched:")
         for table in schema:
-            sim = (
-                "related"
-                if not table.similarity 
-                else table.similarity
+            print(
+                f"name: {table.name} "
+                f"distance: {getattr(table, 'distance', None)}"
             )
-            print(f"name: {table.name} similarity: {sim}")
 
-        result =  {
-        "rules":rules,
-        "schema": schema,
+        return {
+            "rules": rules,
+            "schema": schema,
         }
 
-        # print(result)
 
-        return result
+    def _normalize(self, 
+                   *, 
+                   query:str, 
+                   rules:list[str],  # GuidanceIngest object to str
+                   schema:list[str]  # GuidanceIngest object to str
+                   ) -> dict:
+        prompt = f"""You are performing STRUCTURAL NORMALIZATION for database querying.
+        You must NOT write SQL.
 
-    def _normalize(self, *, query:str, rules:list[dict], schema:list[dict]) -> dict:
-        prompt = f"""
-            You are helping to prepare a database query.
+        First, decide if the query can be answered using the provided schema.
 
-Your job is NOT to write SQL.
+        - If NOT answerable, output exactly:
+        {{ "skip": true }}
 
-Your job is to perform STRUCTURAL NORMALIZATION only.
+        - Otherwise, output {{ "skip": false, ... }} and continue.
 
-Before doing anything else, you MUST decide whether the user query
-is meaningfully answerable using the provided database schema.
+        ====================
+        TASKS (ONLY IF skip=false)
+        ====================
 
-- If the query is informational, conceptual, explanatory, or refers
-  to data NOT present in the schema, output EXACTLY:
-  {{ "skip": true }}
+        1. Identify the high-level intent:
+        - list | exists | aggregate | unknown
 
-- If the query CAN be answered using the schema, continue with
-  structural normalization and output {{ "skip": false, ... }}.
+        2. Extract entities explicitly mentioned in the query.
+        For each:
+        - entity_type: department | subject | faculty | event | other
+        - raw_value: exact surface form from the query
 
-You must perform the following ONLY if skip is false:
+        3. List relevant database tables (table names only).
+        This list is advisory.
 
-1. Identify the user’s high-level intent.
-   Allowed values:
-   - "list"
-   - "exists"
-   - "aggregate"
-   - "unknown"
+        4. Extract comparison expressions (>, <, >=, <=, =), if any.
 
-2. Identify concrete entities mentioned in the query.
-   Examples include (but are not limited to):
-   - faculty
-   - subject
-   - department
-   - event
-   - other
+        5. Extract date/time expressions and normalize to date ranges.
 
-   For each entity:
-   - Extract the entity_type.
-   - Extract the raw_value EXACTLY as it appears in the user query.
-   - Do NOT resolve entities.
-   - Do NOT infer canonical IDs.
-   - Do NOT infer columns or search targets.
+        6. Determine if the query contains multiple independent sub-queries.
+        Split ONLY if each can stand alone.
 
-3. Identify which database tables are relevant to answering the query.
-   - Output ONLY table names.
-   - Do NOT output column names.
-   - Do NOT infer joins, filters, or conditions.
-   - This list is advisory and may be empty.
+        RULE USAGE INSTRUCTION:
+        - The retrieved RULE HINTS describe what entities and structures to extract.
+        - You MUST follow these rules when identifying entities and intent.
+        - Rules guide extraction, but MUST NOT cause you to invent tables or columns.
 
-4. Identify comparison expressions (>, <, >=, <=, =)
-   and extract them WITHOUT binding them to any column.
+        ====================
+        INPUTS
+        ====================
 
-5. Identify date or time expressions and normalize them into date ranges
-   WITHOUT binding them to any table or column.
+        USER QUERY:
+        {query}
 
-6. Identify whether the query contains multiple independent,
-   standalone requests.
-   - Split ONLY if each sub-query can stand alone and be answered independently.
-   - If splitting is not clearly justified, do NOT split.
+        RULE HINTS:
+        {rules}
 
-You are given:
-- The original user query
-- Retrieved rules (hints about what structures may exist)
-- Retrieved schema (available tables and high-level descriptions)
+        AVAILABLE SCHEMA:
+        {schema}
 
-Rules are hints, NOT commands.
-Use ONLY the schema provided.
-Do NOT invent tables or columns.
+        ====================
+        OUTPUT FORMAT (JSON ONLY)
+        ====================
 
-----------------------------------
-USER QUERY:
-{query}
-----------------------------------
+        {{ 
+        "skip": true 
+        }}
 
-RETRIEVED RULE HINTS:
-{json.dumps(rules, indent=2, default=str)}
-----------------------------------
+        OR
 
-AVAILABLE SCHEMA:
-{json.dumps(schema, indent=2, default=str)}
-----------------------------------
+        {{
+        "skip": false,
+        "intent": {{ "type": "list | exists | aggregate | unknown" }},
+        "tables": [],
+        "entities": [],
+        "comparisons": [],
+        "date_constraints": [],
+        "splits": []
+        }}
 
-OUTPUT FORMAT (JSON ONLY):
+        ====================
+        STRICT RULES
+        ====================
 
-If the query is NOT suitable for database processing, output EXACTLY:
-
-{{
-  "skip": true
-}}
-
-Otherwise, output EXACTLY:
-
-{{
-  "skip": false,
-
-  "intent": {{
-    "type": "list | exists | aggregate | unknown"
-  }},
-
-  "tables": [
-    "<table_name>",
-    "<table_name>"
-  ],
-
-  "entities": [
-    {{
-      "entity_type": "department | subject | faculty | event | other",
-      "raw_value": "<value exactly as in the query>"
-    }}
-  ],
-
-  "comparisons": [
-    {{
-      "operator": ">|<|>=|<=|=",
-      "value": "<number or literal>",
-      "raw_text": "<original phrase from the query>"
-    }}
-  ],
-
-  "date_constraints": [
-    {{
-      "start_date": "<YYYY-MM-DD or null>",
-      "end_date": "<YYYY-MM-DD or null>",
-      "raw_text": "<original phrase from the query>"
-    }}
-  ],
-
-  "splits": [
-    {{
-      "sub_query": "<standalone sub-query text>"
-    }}
-  ]
-}}
-
-STRICT OUTPUT RULES:
-- Output MUST be valid JSON.
-- Output MUST be either {{ "skip": true }} OR the full normalized object.
-- Do NOT mix skip with other fields.
-- Do NOT include comments, explanations, or annotations.
-- Do NOT include markdown or code fences.
-- Do NOT infer joins, aggregations, or SQL logic.
-- Do NOT bind comparisons or dates to specific columns.
-- If a section does not apply, output an empty array.
-- Invalid JSON is a failure.
-
+        - Output VALID JSON only.
+        - Do NOT write SQL.
+        - Do NOT infer joins, columns, or filters.
+        - If a section does not apply, return an empty array.
+        HARD RULE:
+        If AVAILABLE SCHEMA is empty or missing,
+        you MUST output exactly:
+        {{ "skip": true }}
         """
 
         print(f"Token count normalize: {len(prompt) // 4}\n\n")
@@ -314,13 +260,26 @@ STRICT OUTPUT RULES:
             **normalized,
             "entities": resolved_output,
         }
-
-
-
-
-
     
-    def _generate_sql_object(self, *, query:str, resolved_output:dict, schema:dict):
+    def _get_generate_rules(self, *, query:str) -> list[GuidanceIngest]:
+        rules = self.guidance_retriever.retrieve(
+            query=query,
+            type="generate_rules"
+        )
+
+        print("\n\nFetched rules:\n\n")
+        for rule in rules:
+            print(f"{rule.name} {rule.similarity}")
+
+        return rules
+
+    def _generate_sql_object(self, 
+                             *, 
+                             query:str, 
+                             resolved_output:dict, 
+                             schema:list[str],
+                             generate_rules:list[str]
+                             ):
         prompt = f"""
         You are generating SQL QUERY STRINGS for DEVELOPMENT PURPOSES ONLY.
 
@@ -351,17 +310,14 @@ STRICT OUTPUT RULES:
         3. Do NOT invent tables, columns, joins, or filters.
         4. If the normalized output contains `splits`,
         generate ONE SQL QUERY OBJECT PER sub_query.
-        5. Select the MAXIMUM REASONABLE SET OF COLUMNS to produce rich results.
-        - Prefer human-meaningful columns (names, titles, codes, timestamps).
-        - Exclude pure identifiers unless required for joins or grouping.
-        6. Use joins when they enrich the result (names, descriptions, codes).
-        7. Respect entity resolution:
+        5. Select columns required to answer the query.
+        6. Respect entity resolution:
         - If `resolution_confidence` is high, apply filters using resolved entity IDs.
         - If `resolution_confidence` is none, DO NOT force filters.
-        8. Use ONLY joins explicitly defined in the schema.
-        9. ALL literal values MUST be parameterized using %s placeholders.
+        7. Use ONLY joins explicitly defined in the schema.
+        8. ALL literal values MUST be parameterized using %s placeholders.
         - DO NOT inline values directly into SQL.
-        10. Generate SELECT queries ONLY.
+        9. Generate SELECT queries ONLY.
 
         ====================
         INPUTS
@@ -378,7 +334,7 @@ STRICT OUTPUT RULES:
         --------------------
 
         AVAILABLE TABLE SCHEMAS:
-        {json.dumps(schema, indent=2, default=str)}
+        {schema}
 
         Each schema entry includes:
         - table name
@@ -387,6 +343,21 @@ STRICT OUTPUT RULES:
         - table purpose and relationsips
 
         These schemas are authoritative.
+
+        ====================
+        GENERATION RULES
+        ====================
+
+        The following rules control WHAT columns should be selected
+        and how rich the result should be.
+
+        These rules:
+        - Affect column selection only
+        - MUST NOT introduce new tables, joins, or filters
+        - MUST NOT override the schema
+
+        {generate_rules}
+
 
         ====================
         OUTPUT FORMAT
@@ -442,6 +413,8 @@ STRICT OUTPUT RULES:
 
         
         print(f"Token count sql object: {len(prompt) // 4}\n\n")
+
+        print(prompt)
 
         response = self.llm.invoke(prompt)
         raw = response.content
@@ -532,11 +505,11 @@ STRICT OUTPUT RULES:
             rule_k=rule_k,
             schema_k=schema_k,
         )
-        rules:list[RuleChunk] = rules_and_schema.get("rules", [])
-        schema:list[SchemaChunk] = rules_and_schema.get("schema", [])
+        rules:list[GuidanceIngest] = rules_and_schema.get("rules", [])
+        schema:list[GuidanceIngest] = rules_and_schema.get("schema", [])
 
-        minimal_rules = [rule.to_minimal_dict() for rule in rules]
-        minmal_schema = [row.to_minimal_dict() for row in schema]
+        minimal_rules = [rule.to_prompt_block() for rule in rules]
+        minmal_schema = [row.to_prompt_block() for row in schema]
 
         print("Running normalization...")
         normalized_result = self._normalize(
@@ -561,11 +534,17 @@ STRICT OUTPUT RULES:
         print(resolved_output)
         print("\n")
 
+        generate_rules:list[GuidanceIngest] = self._get_generate_rules(query=query)
+
+        minimal_generate_rules = [rule.to_prompt_block()
+                                  for rule in generate_rules]
+
         print("Running SQL object generation...")
         sql_objects_list = self._generate_sql_object(
             query=query,
             resolved_output=resolved_output,
-            schema=schema,
+            schema=minmal_schema,
+            generate_rules=minimal_generate_rules
         )
 
         print(sql_objects_list)

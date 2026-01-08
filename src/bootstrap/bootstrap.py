@@ -22,7 +22,6 @@ from src.pipelines.answer_pipeline import AnswerPipeline
 from src.pipelines.sql_ingestion import SQLIngestion
 from src.pipeline import MainPipeline
 
-
 # ---------- Shared resources ----------
 
 def create_vector_store(conn):
@@ -130,13 +129,14 @@ def create_scrape_ingestion_pipeline(sql_ingestor, sql_retriever, vector_ingesto
         embedder=embedder
     )
 
+conn = create_connection()
+llm = create_groq_llm()
+embedder = create_embedder()
+
 
 # ---------- App wiring ----------
 
 def create_app() -> MainPipeline:
-    conn = create_connection()
-    llm = create_groq_llm()
-    embedder = create_embedder()
 
     # guidance
     guidance_store = create_guidance_store(conn=conn)

@@ -1,13 +1,13 @@
 from langchain_community.document_loaders import TextLoader, PyPDFLoader, Docx2txtLoader
 from langchain_core.messages import HumanMessage, AIMessage
 from src.database.db import get_connection
+from src.schema.generate_rules import generate_rules
 from src.services.scrape_service import parse_faculty_from_url
 from src.services.user_service import create_user, user_login
 from src.bootstrap.bootstrap import create_app
-from src.schema.schema import SQL_SCHEMA_EMBEDDINGS, system_user
-from src.schema.hints_and_rules import rules
-
-conn = get_connection()
+from src.schema.schema import schema, system_user
+from src.schema.realisation_rules import realisation_rules
+from src.bootstrap.bootstrap import conn
 def create_loader(path: str):
     if path.endswith(".txt"):
         return TextLoader(path)
@@ -175,22 +175,21 @@ def main():
 
         elif cmd.lower() == "update schema":
             try:
-                result = app.ingest_schema(rules=rules, schema=SQL_SCHEMA_EMBEDDINGS, truncate=True)
+                result = app.ingest_schema(
+                    realisation_rules=realisation_rules,
+                    schema=schema,
+                    generate_rules=generate_rules,
+                    truncate=True
+                )
+                # print(result)
+                print("Schema ingestion completed.")
                 conn.commit()
             except Exception as e:
                 conn.rollback()
                 print(e)
 
-            print("Schema ingestion completed.")
-            print(result)
-
-                
-
         else:
             print("Try again")
-
-        
-
 
 if __name__ == "__main__":
     main()

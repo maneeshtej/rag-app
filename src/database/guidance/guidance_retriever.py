@@ -1,7 +1,4 @@
-# src/database/guidance/guidance_retriever.py
-
-from src.models.document import RuleChunk, SchemaChunk
-from src.models.user import User
+from src.models.guidance import GuidanceIngest
 
 
 class GuidanceRetriever:
@@ -9,55 +6,33 @@ class GuidanceRetriever:
         self.guidance_store = guidance_store
         self.embedder = embedder
 
-    def retrieve_query(
+    def retrieve(
         self,
         *,
         query: str,
-        user: User,
         type: str,
-        k: int = 5,
-    ) -> list[RuleChunk]:
+        soft_k: int = 3,
+        hard_k: int = 8,
+        min_similarity: float = 0.65,
+    ) -> list[GuidanceIngest]:
         query_embedding = self.embedder.embed_query(query)
 
-        return self.guidance_store.semantic_query_search(
+        candidates = self.guidance_store.similarity_search(
             query_embedding=query_embedding,
             type=type,
-            k=k,
-        )
-    
-    def retrieve_schema(
-    self,
-    *,
-    query: str,
-    user: User,
-    k: int = 5,
-    ) -> list[SchemaChunk]:
-
-        query_embedding = self.embedder.embed_query(query)
-
-        primary = self.guidance_store.semantic_schema_search(
-            query_embedding=query_embedding,
-            k=k,
+            k=hard_k,
         )
 
-        related_names: set[str] = set()
+        selected: list[GuidanceIngest] = []
 
-        for chunk in primary:
-            related_names.update(chunk.related_tables)
+        for idx, item in enumerate(candidates):
+            # always include top soft_k
+            if idx < soft_k:
+                selected.append(item)
+                continue
 
-        primary_names = {c.name for c in primary}
-        related_names -= primary_names
+            # similarity threshold
+            if item.similarity is not None and item.similarity >= min_similarity:
+                selected.append(item)
 
-        if not related_names:
-            return primary
-
-        related = self.guidance_store.fetch_schema_by_names(
-            names=list(related_names)
-        )
-
-        merged: dict[str, SchemaChunk] = {c.name: c for c in primary}
-        for c in related:
-            merged.setdefault(c.name, c)
-
-        return list(merged.values())
-
+        return selected
