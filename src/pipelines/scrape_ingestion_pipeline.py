@@ -6,10 +6,11 @@ from langchain_core.documents import Document
 
 
 class ScrapeIngestionPipeline:
-    def __init__(self, sql_ingester, sql_retriever, vector_ingestor):
+    def __init__(self, sql_ingester, sql_retriever, vector_ingestor, embedder):
         self.sql_ingester = sql_ingester
         self.sql_retriever = sql_retriever
         self.vector_ingestor = vector_ingestor
+        self.embedder = embedder
 
     # ---------- helpers ----------
 
@@ -176,6 +177,84 @@ class ScrapeIngestionPipeline:
                     }
                 )
 
+    def _faculty_surface_forms(self, name: str) -> set[str]:
+        forms = set()
+
+        base = name.strip()
+        lower = base.lower()
+
+        forms.add(base)
+        forms.add(lower)
+
+        for title in ["Prof", "Professor", "Dr"]:
+            forms.add(f"{title} {base}")
+            forms.add(f"{title.lower()} {lower}")
+
+        tokens = lower.split()
+        if len(tokens) == 2:
+            forms.add(f"{tokens[1]} {tokens[0]}")  # reorder
+
+        return forms
+    
+    def _ingest_faculty_entity_embeddings(
+        self,
+        *,
+        faculty_map: dict,
+    ):
+        for name, data in faculty_map.items():
+            faculty_id = data["id"]
+
+            for surface in self._faculty_surface_forms(name):
+                vec = self.embedder.embed_query(surface)
+
+                self.sql_ingester.ingest(
+                    sql_obj={
+                        "table": "entity_embeddings",
+                        "action": "insert",
+                        "data": {
+                            "entity_type": "faculty",
+                            "entity_id": faculty_id,
+                            "surface_form": surface,
+                            "embedding": vec,
+                        },
+                    }
+                )
+
+
+    def _ingest_subject_entity_embeddings(
+        self,
+        *,
+        subject_map: dict,
+    ):
+        for subject_name, data in subject_map.items():
+            subject_id = data["subject_id"]
+
+            forms = {
+                subject_name,
+                subject_name.lower(),
+                subject_name.replace(" ", ""),
+            }
+
+            for surface in forms:
+                vec = self.embedder.embed_query(surface)
+
+                self.sql_ingester.ingest(
+                    sql_obj={
+                        "table": "entity_embeddings",
+                        "action": "insert",
+                        "data": {
+                            "entity_type": "subject",
+                            "entity_id": subject_id,
+                            "surface_form": surface,
+                            "embedding": vec,
+                        },
+                    }
+                )
+
+
+
+
+
 
 
     def _ingest_vector(
@@ -279,6 +358,7 @@ class ScrapeIngestionPipeline:
             faculty_objs=faculty_objs,
             dept_id=dept_id,
         )
+
         subject_map = self._ensure_subjects(
             faculty_map=faculty_map,
             dept_id=dept_id
@@ -287,6 +367,9 @@ class ScrapeIngestionPipeline:
             subject_map=subject_map,
             dept_id=dept_id
         )
+
+        self._ingest_faculty_entity_embeddings(faculty_map=faculty_map)
+        self._ingest_subject_entity_embeddings(subject_map=subject_map)
 
         vector = self._ingest_vector(
             raw_profiles=profiles,
