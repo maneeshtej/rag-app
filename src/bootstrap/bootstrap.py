@@ -16,10 +16,9 @@ from src.database.dependencies import create_embedder
 from src.database.guidance.guidance_store import GuidanceStore
 
 from src.pipelines.retrieval_pipeline import RetrievalPipeline
-from src.pipelines.scrape_ingestion_pipeline import ScrapeIngestionPipeline
+from src.pipelines.scraping.scrape_ingestion_pipeline import ScrapeIngestionPipeline
 from src.pipelines.vector_ingestion import VectorIngestion
 from src.pipelines.answer_pipeline import AnswerPipeline
-from src.pipelines.sql_ingestion import SQLIngestion
 from src.pipeline import MainPipeline
 
 # ---------- Shared resources ----------
@@ -98,14 +97,6 @@ def create_vector_ingestion(vector_ingestor):
     return VectorIngestion(
         splitter=create_text_splitter(),
         ingestor=vector_ingestor,
-    )
-
-
-def create_sql_ingestion(conn, llm):
-    return SQLIngestion(
-        conn=conn,
-        llm=llm,
-        vision_llm=llm,
     )
 
 
