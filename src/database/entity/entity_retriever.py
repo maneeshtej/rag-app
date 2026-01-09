@@ -11,6 +11,53 @@ class EntityRetriever:
         hard_k: int = 5,
         threshold: float = 0.7,
     ) -> list[dict]:
+        """
+        Perform embedding-based similarity search for multiple queries.
+
+        Input Shape
+        -----------
+        queries : list[dict]
+            [
+                {
+                    "surface_form": str,
+                    "entity_type": str
+                }
+            ]
+
+        Parameters
+        ----------
+        soft_k : int
+            Number of top results to always include regardless of similarity.
+        hard_k : int
+            Maximum number of results to fetch from the vector store.
+        threshold : float
+            Minimum similarity score required for inclusion
+            beyond the soft_k cutoff.
+
+        Behavior
+        --------
+        - Embeds each surface_form
+        - Searches the entity_embeddings table for nearest vectors
+        - Applies soft/hard filtering
+        - Hydrates matched entity rows from their source tables
+
+        Returns
+        -------
+        list[dict]
+            [
+                {
+                    "surface_form": str,
+                    "entity_type": str,
+                    "resolved": [
+                        {
+                            "entity": tuple,        # DB row
+                            "similarity": float,
+                            "source_table": str
+                        }
+                    ]
+                }
+            ]
+        """
 
         output = []
 
@@ -34,6 +81,32 @@ class EntityRetriever:
 
 
     def _similarity_search(self, entity_type, embedding, hard_k):
+        """
+            Perform raw vector similarity search.
+
+            Input
+            -----
+            entity_type : str
+                Logical entity type to constrain search.
+            embedding : list[float]
+                Vector representation of the query surface form.
+            hard_k : int
+                Maximum number of nearest neighbors to retrieve.
+
+            Behavior
+            --------
+            - Queries entity_embeddings using cosine distance
+            - Orders by closest vectors
+            - Limits results to hard_k
+
+            Returns
+            -------
+            list[tuple]
+                [
+                    (entity_id, source_table, similarity_score)
+                ]
+            """
+
         sql = """
         SELECT
             entity_id,
@@ -49,6 +122,28 @@ class EntityRetriever:
         )
 
     def _apply_soft_hard(self, rows, soft_k, threshold):
+        """
+        Apply soft-k and similarity threshold filtering.
+
+        Input
+        -----
+        rows : list[tuple]
+            [
+                (entity_id, source_table, similarity)
+            ]
+
+        Behavior
+        --------
+        - Always keeps the first soft_k results
+        - Keeps additional results only if similarity >= threshold
+        - Stops processing once threshold condition fails
+
+        Returns
+        -------
+        list[tuple]
+            Filtered list of (entity_id, source_table, similarity)
+        """
+
         out = []
         for i, (entity_id, source_table, similarity) in enumerate(rows):
             if i < soft_k or similarity >= threshold:
@@ -58,6 +153,34 @@ class EntityRetriever:
         return out
 
     def _hydrate(self, rows):
+        """
+        Fetch full database records for matched entity IDs.
+
+        Input
+        -----
+        rows : list[tuple]
+            [
+                (entity_id, source_table, similarity)
+            ]
+
+        Behavior
+        --------
+        - Groups entity IDs by source table
+        - Fetches full rows from each table
+        - Attaches similarity score and source table metadata
+
+        Returns
+        -------
+        list[dict]
+            [
+                {
+                    "entity": tuple,         # full DB row
+                    "similarity": float,
+                    "source_table": str
+                }
+            ]
+        """
+
         by_table = {}
         for entity_id, table, similarity in rows:
             by_table.setdefault(table, []).append((entity_id, similarity))
