@@ -22,8 +22,10 @@ __pycache__/
 # Test & scratch files
 test.*
 *_test.*
+test_*
 scratch.*
 debug.*
+test/
 
 # Data / documents (local experiments)
 *.txt
