@@ -1,50 +1,28 @@
 class EntityResolver:
-    def __init__(self, *, entity_retriever):
+    def __init__(
+        self,
+        *,
+        entity_retriever,
+        sql_ingestor,
+        entity_ingestor,
+    ):
         self.entity_retriever = entity_retriever
+        self.sql_ingestor = sql_ingestor
+        self.entity_ingestor = entity_ingestor
 
     def resolve(self, payload: dict):
         """
-        Resolve entities for a batch of rows belonging to the same table/type.
-
-        Input Shape
-        -----------
-        payload : dict
-            {
-                "table": str,
-                "entity_type": str,
-                "rows": list[dict]
-            }
-
-        Where:
-        - table       : database table name (e.g. "subjects", "teachers")
-        - entity_type : logical entity type used for embeddings
-                        (e.g. "subject", "teacher", "class")
-        - rows        : list of dictionaries where each dictionary
-                        represents a DB-shaped row (no id field)
-
-        Behavior
-        --------
-        - For each row:
-            - Concatenates all non-empty column values into a surface string
-            - Sends the surface string to EntityRetriever for similarity search
-        - Uses soft_k=0 and hard_k=1 for deterministic lookup
-
-        Returns
-        -------
-        list[dict]
-            [
-                {
-                    "row": dict,                 # original input row
-                    "surface_form": str,         # concatenated text
-                    "resolved": list[dict]       # hydrated DB matches
-                }
-            ]
-
-        Notes
-        -----
-        - This function does NOT insert or update database rows
-        - It only performs retrieval and returns candidates
+        Entry point.
+        Resolves entities and ingests unresolved ones.
         """
+
+        resolved_items = self._resolve_only(payload)
+        print(f"\n\nResolved: \n\n{resolved_items}")
+        self._ingest_unresolved(payload, resolved_items)
+
+        return resolved_items
+
+    def _resolve_only(self, payload: dict):
         rows = payload["rows"]
         entity_type = payload["entity_type"]
 
@@ -65,48 +43,97 @@ class EntityResolver:
             {
                 "row": row,
                 "surface_form": q["surface_form"],
-                "resolved": r["resolved"]
+                "resolved": r["resolved"],
             }
             for row, q, r in zip(rows, queries, results)
         ]
 
-    def _build_surface_form(self, row):
-        """
-        Build a surface form string from a DB-shaped row.
+    # -------------------------
+    # Step 2: ingest unresolved
+    # -------------------------
+    def _ingest_unresolved(self, payload: dict, resolved_items: list[dict]):
+        table = payload["table"]
+        entity_type = payload["entity_type"]
 
-        Input Shape
-        -----------
-        row : dict
-            {
-                <column_name>: <value>,
-                ...
-            }
+        to_embed = []
 
-        Behavior
-        --------
-        - Iterates over all values in the row
-        - Filters out None, empty strings, and empty lists
-        - Converts remaining values to strings
-        - Concatenates them using a single space
+        for item in resolved_items:
+            # already resolved → skip
+            if item["resolved"]:
+                continue
 
-        Returns
-        -------
-        str
-            A flattened textual representation of the row suitable
-            for embedding and similarity search.
+            entity_id = self._insert_row(
+                table=table,
+                row=item["row"]
+            )
 
-        Example
-        -------
-        Input:
-            {
-                "subject_code": "22CS71",
-                "subject_name": "High Performance Computing"
-            }
+            embedding_texts = self._build_embedding_texts(
+            item["surface_form"]
+            )
 
-        Output:
-            "22CS71 High Performance Computing"
-        """
+            to_embed.append({
+                "entity_type": entity_type,
+                "entity_id": entity_id,
+                "surface_form": item["surface_form"],
+                "source_table": table,
+                "embedding_text": embedding_texts})
+        print(f"\n\nTo embed: {to_embed}")
+
+        if to_embed:
+            self.entity_ingestor.ingest(to_embed)
+
+    # -------------------------
+    # Step 2a: insert business row
+    # -------------------------
+    def _insert_row(self, *, table: str, row: dict) -> str:
+        sql_obj = {
+            "action": "insert",
+            "table": table,
+            "data": row,
+            "returning": "id",
+        }
+
+        result = self.sql_ingestor.ingest(sql_obj=sql_obj)
+        return result[0][0]
+
+    # -------------------------
+    # Utility: surface form
+    # -------------------------
+    def _build_surface_form(self, row: dict) -> str:
         return " ".join(
-            str(v) for v in row.values()
+            str(v)
+            for v in row.values()
             if v not in (None, "", [])
         )
+    
+    def _build_embedding_texts(self, surface_form: str) -> list[str]:
+        """
+        Generate multiple textual variants for embedding.
+        """
+        base = surface_form.strip()
+
+        parts = base.split()
+
+        variants = set()
+        variants.add(base)
+
+        # lowercase / uppercase
+        variants.add(base.lower())
+        variants.add(base.title())
+
+        # individual tokens
+        for p in parts:
+            variants.add(p)
+            variants.add(p.lower())
+            variants.add(p.title())
+
+        # remove titles
+        titles = {"dr", "prof", "mr", "ms", "mrs"}
+        filtered = [p for p in parts if p.lower().strip(".") not in titles]
+        if filtered:
+            variants.add(" ".join(filtered))
+            variants.add(" ".join(filtered).lower())
+            variants.add(" ".join(filtered).title())
+
+        return list(variants)
+

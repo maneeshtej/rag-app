@@ -7,10 +7,19 @@ class EntityIngestor:
         if not entities:
             return 0
 
-        texts = [
-            e.get("embedding_text", e["surface_form"])
-            for e in entities
-        ]
+        texts = []
+        expanded = []
+
+        for e in entities:
+            emb_texts = e.get("embedding_text")
+
+            if isinstance(emb_texts, list):
+                for t in emb_texts:
+                    texts.append(t)
+                    expanded.append({**e, "embedding_text": t})
+            else:
+                texts.append(e["surface_form"])
+                expanded.append({**e, "embedding_text": e["surface_form"]})
 
         embeddings = self.embedder.embed_documents(texts)
 
@@ -29,11 +38,12 @@ class EntityIngestor:
             (
                 e["entity_type"],
                 e["entity_id"],
-                e["surface_form"],
+                e["embedding_text"],   # variant text
                 e["source_table"],
                 emb,
             )
-            for e, emb in zip(entities, embeddings)
+            for e, emb in zip(expanded, embeddings)
         ]
 
         return self.entity_store.execute_write(sql, params)
+

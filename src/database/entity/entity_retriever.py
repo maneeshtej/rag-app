@@ -11,55 +11,6 @@ class EntityRetriever:
         hard_k: int = 5,
         threshold: float = 0.7,
     ) -> list[dict]:
-        """
-        Perform embedding-based similarity search for multiple queries.
-
-        Input Shape
-        -----------
-        queries : list[dict]
-            [
-                {
-                    "surface_form": str,
-                    "entity_type": str
-                }
-            ]
-
-        Parameters
-        ----------
-        soft_k : int
-            Number of top results to always include regardless of similarity.
-        hard_k : int
-            Maximum number of results to fetch from the vector store.
-        threshold : float
-            Minimum similarity score required for inclusion
-            beyond the soft_k cutoff.
-
-        Behavior
-        --------
-        - Embeds each surface_form
-        - Searches the entity_embeddings table for nearest vectors
-        - Applies soft/hard filtering
-        - Hydrates matched entity rows from their source tables
-
-        Returns
-        -------
-        list[dict]
-            [
-                {
-                    "surface_form": str,
-                    "entity_type": str,
-                    "resolved": [
-                        {
-                            "entity": tuple,        # DB row
-                            "similarity": float,
-                            "source_table": str
-                        }
-                    ]
-                }
-            ]
-        """
-
-        output = []
 
         for q in queries:
             surface_form = q["surface_form"]
@@ -69,15 +20,13 @@ class EntityRetriever:
 
             rows = self._similarity_search(entity_type, embedding, hard_k)
             filtered = self._apply_soft_hard(rows, soft_k, threshold)
-            hydrated = self._hydrate(filtered)
+            # hydrated = self._hydrate(filtered)
 
-            output.append({
-                "surface_form": surface_form,
-                "entity_type": entity_type,
-                "resolved": hydrated
-            })
+            # 🔹 populate in-place
+            q["resolved"] = filtered
 
-        return output
+        return queries
+
 
 
     def _similarity_search(self, entity_type, embedding, hard_k):
@@ -152,51 +101,3 @@ class EntityRetriever:
                 break
         return out
 
-    def _hydrate(self, rows):
-        """
-        Fetch full database records for matched entity IDs.
-
-        Input
-        -----
-        rows : list[tuple]
-            [
-                (entity_id, source_table, similarity)
-            ]
-
-        Behavior
-        --------
-        - Groups entity IDs by source table
-        - Fetches full rows from each table
-        - Attaches similarity score and source table metadata
-
-        Returns
-        -------
-        list[dict]
-            [
-                {
-                    "entity": tuple,         # full DB row
-                    "similarity": float,
-                    "source_table": str
-                }
-            ]
-        """
-
-        by_table = {}
-        for entity_id, table, similarity in rows:
-            by_table.setdefault(table, []).append((entity_id, similarity))
-
-        results = []
-        for table, items in by_table.items():
-            ids = [eid for eid, _ in items]
-            sql = f"SELECT * FROM {table} WHERE id = ANY(%s::uuid[])"
-            records = self.entity_store.execute_read(sql, (ids,))
-            record_map = {r[0]: r for r in records}
-
-            for entity_id, similarity in items:
-                if entity_id in record_map:
-                    results.append({
-                        "entity": record_map[entity_id],
-                        "similarity": similarity,
-                        "source_table": table,
-                    })
-        return results
