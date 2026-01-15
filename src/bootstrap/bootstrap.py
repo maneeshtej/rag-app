@@ -1,5 +1,7 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+from src.database.entity.entity_retriever import EntityRetriever
+from src.database.entity.entity_store import EntityStore
 from src.database.guidance import guidance_store
 from src.database.guidance.guidance_ingestor import GuidanceIngestor
 from src.database.llm import create_groq_llm
@@ -22,6 +24,14 @@ from src.pipelines.answer_pipeline import AnswerPipeline
 from src.pipeline import MainPipeline
 
 # ---------- Shared resources ----------
+
+def create_entity_store(conn):
+    print("loaded entity store")
+    return EntityStore(conn=conn)
+
+def create_entity_retriever(entity_store, embedder):
+    print("loaded entity retriever")
+    return EntityRetriever(entity_store=entity_store, embedder=embedder)
 
 def create_vector_store(conn):
     print("loaded vector store")
@@ -66,12 +76,13 @@ def create_sql_store(conn):
     )
 
 
-def create_sql_retriever(guidance_retriever, sql_store, llm, embedder):
+def create_sql_retriever(guidance_retriever, sql_store, llm, embedder, entity_retriever):
     return SQLRetriever(
         guidance_retriever=guidance_retriever,
         sql_store=sql_store,
         llm=llm,
-        embedder=embedder
+        embedder=embedder,
+        entity_retriver=entity_retriever
     )
 
 def create_sql_ingestor(sql_store):
@@ -129,6 +140,9 @@ embedder = create_embedder()
 
 def create_app() -> MainPipeline:
 
+    entity_store = create_entity_store(conn=conn)
+    entity_retriever = create_entity_retriever(entity_store=entity_store, embedder=embedder)
+
     # guidance
     guidance_store = create_guidance_store(conn=conn)
     guidance_retriever = create_guidance_retriever(guidance_store=guidance_store, embedder=embedder)
@@ -141,7 +155,7 @@ def create_app() -> MainPipeline:
 
     # sql
     sql_store = create_sql_store(conn=conn)
-    sql_retriever = create_sql_retriever(guidance_retriever=guidance_retriever, llm=llm, sql_store=sql_store, embedder=embedder)
+    sql_retriever = create_sql_retriever(guidance_retriever=guidance_retriever, llm=llm, sql_store=sql_store, embedder=embedder, entity_retriever=entity_retriever)
     sql_ingestor = create_sql_ingestor(sql_store=sql_store)
 
     # --- Pipelines ---

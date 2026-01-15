@@ -6,11 +6,12 @@ from src.database.guidance.guidance_retriever import GuidanceRetriever
 
 
 class SQLRetriever:
-    def __init__(self, *, guidance_retriever:GuidanceRetriever, llm, sql_store, embedder):
+    def __init__(self, *, guidance_retriever, llm, sql_store, embedder, entity_retriver):
         self.guidance_retriever = guidance_retriever
         self.llm = llm
         self.sql_store = sql_store
         self.embedder = embedder
+        self.entity_retriever = entity_retriver
 
     def _get_rules_and_schema(
         self,
@@ -75,7 +76,7 @@ class SQLRetriever:
 
         2. Extract entities explicitly mentioned in the query.
         For each:
-        - entity_type: department | subject | faculty | event | other
+        - entity_type: subject | teacher | others 
         - raw_value: exact surface form from the query
 
         3. List relevant database tables (table names only).
@@ -134,6 +135,19 @@ class SQLRetriever:
         - Do NOT write SQL.
         - Do NOT infer joins, columns, or filters.
         - If a section does not apply, return an empty array.
+        ENTITIES OBJECT SCHEMA (STRICT):
+
+        Each item in "entities" MUST have EXACTLY this structure:
+
+        {{
+        "entity_type": "subject" | "faculty",
+        "raw_value": string
+        }}
+
+        - Do NOT include any other keys.
+        - Do NOT rename fields.
+        - Do NOT infer IDs.
+        - raw_value MUST be an exact substring from the USER QUERY.
         HARD RULE:
         If AVAILABLE SCHEMA is empty or missing,
         you MUST output exactly:
@@ -162,104 +176,67 @@ class SQLRetriever:
                 text = text[4:].strip()
 
         return json.loads(text)
-    
-    def _resolve_single_entity(
-        self,
-        *,
-        entity_type: str,
-        query: str,
-        k: int = 3,
-        max_distance: float = 0.8,
-    ) -> list[dict]:
-        """
-        Resolve entities using vector search over entity_embeddings
-        and return canonical rows from source tables.
-        """
 
-        query_vec = self.embedder.embed_query(query)
-
-        if entity_type == "faculty":
-            join_sql = "JOIN faculty f ON f.id = e.entity_id"
-            select_cols = """
-                e.entity_id,
-                f.name,
-                f.designation,
-                f.email,
-                e.surface_form,
-                e.embedding <-> %s::vector AS distance
-            """
-        elif entity_type == "subject":
-            join_sql = "JOIN subjects s ON s.id = e.entity_id"
-            select_cols = """
-                e.entity_id,
-                s.name,
-                e.surface_form,
-                e.embedding <-> %s::vector AS distance
-            """
-        else:
-            return []
-
-        sql = f"""
-            SELECT
-                x.*
-            FROM (
-                SELECT DISTINCT ON (e.entity_id)
-                    {select_cols}
-                FROM entity_embeddings e
-                {join_sql}
-                WHERE e.entity_type = %s
-                ORDER BY e.entity_id, distance
-            ) x
-            ORDER BY x.distance
-        """
-
-        rows = self.sql_store.execute_read(
-            sql=sql,
-            params=(query_vec, entity_type),
-            limit=k
-        )
-
-        # hard safety gate — reject garbage matches
-        return [r for r in rows if r["distance"] is not None]
 
     
     def _resolve_entities(self, *, normalized: dict) -> dict:
         if normalized.get("skip") is True:
             return {**normalized, "entities": []}
 
-        resolved_output = []
+        # 1. Build retriever queries
+        queries = []
+        index_map = []  # keeps entity ↔ query alignment
 
         for entity in normalized.get("entities", []):
             entity_type = entity.get("entity_type")
             raw_value = entity.get("raw_value")
 
             if not entity_type or not raw_value:
-                resolved_output.append({
+                index_map.append(None)
+                continue
+
+            queries.append({
+                "surface_form": raw_value,
+                "entity_type": entity_type,
+            })
+            index_map.append(len(queries) - 1)
+
+        resolved_queries = self.entity_retriever.retrieve(
+            queries,
+            soft_k=1,
+            hard_k=3,
+            threshold=0.7,
+        )
+
+        resolved_entities = []
+        q_idx = 0
+
+        for entity, map_idx in zip(normalized.get("entities", []), index_map):
+            if map_idx is None:
+                resolved_entities.append({
                     **entity,
                     "resolved": [],
                     "resolution_confidence": "none",
                 })
                 continue
 
-            matches = self._resolve_single_entity(
-                entity_type=entity_type,
-                query=raw_value,
-            )
+            resolved = resolved_queries[map_idx].get("resolved", [])
 
-            resolved_output.append({
+            resolved_entities.append({
                 **entity,
-                "resolved": matches,
+                "resolved": resolved,
                 "resolution_confidence": (
-                    "high" if len(matches) == 1
-                    else "low" if len(matches) > 1
+                    "high" if len(resolved) == 1
+                    else "low" if len(resolved) > 1
                     else "none"
                 )
             })
 
         return {
             **normalized,
-            "entities": resolved_output,
+            "entities": resolved_entities,
         }
+
     
     def _get_generate_rules(self, *, query:str) -> list[GuidanceIngest]:
         rules = self.guidance_retriever.retrieve(

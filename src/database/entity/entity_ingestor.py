@@ -4,6 +4,24 @@ class EntityIngestor:
         self.embedder = embedder
 
     def ingest(self, entities: list[dict]) -> int:
+        """
+        Ingest canonical entities into the entity_embeddings table.
+
+        Input shape:
+        entities = [
+          {
+            "entity_type": str,          # e.g. "teacher"
+            "entity_id": UUID | str,     # canonical entity id
+            "surface_form": str,         # base surface form
+            "source_table": str,         # e.g. "teachers"
+
+            # OPTIONAL:
+            "embedding_text": str | list[str]
+            # If list[str]: multiple embedding variants will be created
+            # If missing: surface_form is used as embedding text
+          }
+        ]
+        """
         if not entities:
             return 0
 

@@ -47,10 +47,8 @@ class EntityResolver:
             }
             for row, q, r in zip(rows, queries, results)
         ]
+    
 
-    # -------------------------
-    # Step 2: ingest unresolved
-    # -------------------------
     def _ingest_unresolved(self, payload: dict, resolved_items: list[dict]):
         table = payload["table"]
         entity_type = payload["entity_type"]
@@ -82,9 +80,6 @@ class EntityResolver:
         if to_embed:
             self.entity_ingestor.ingest(to_embed)
 
-    # -------------------------
-    # Step 2a: insert business row
-    # -------------------------
     def _insert_row(self, *, table: str, row: dict) -> str:
         sql_obj = {
             "action": "insert",
@@ -96,9 +91,6 @@ class EntityResolver:
         result = self.sql_ingestor.ingest(sql_obj=sql_obj)
         return result[0][0]
 
-    # -------------------------
-    # Utility: surface form
-    # -------------------------
     def _build_surface_form(self, row: dict) -> str:
         return " ".join(
             str(v)

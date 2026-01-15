@@ -1,72 +1,4 @@
 realisation_rules: list[dict] = [
-   {
-      "name": "department_realisation",
-      "type": "realisation_rules",
-      "priority": 0,
-
-      "content": """
-    You MUST detect and extract department references from the user query.
-
-    A department reference exists whenever the query mentions any academic department,
-    branch, or field of study that maps to a department.
-
-    When a department reference is present:
-    - Extract it as an entity with entity_type = "department".
-    - The extracted value MUST be the exact surface form from the user query.
-    - Add it to the SQL planning object's entity list.
-    - Do NOT treat department mentions as plain text filters.
-    - Do NOT bind the department to a table or column at this stage.
-
-    Department entities MUST be resolved later to a canonical representation
-    (department_id or department_name).
-
-    Failure to extract a department entity when present is an error.
-    """,
-
-      "embedding_text": """
-    department
-    academic department
-    branch
-    field
-    stream
-    specialization
-
-    computer science
-    computer science department
-    cs
-    cse
-    computer department
-
-    information technology
-    it
-    it department
-
-    electronics
-    electronics department
-    ece
-    electrical
-    ee
-
-    mechanical
-    mechanical engineering
-    mech
-    mechanical department
-
-    civil
-    civil engineering
-    civil department
-
-    from department
-    in department
-    of department
-    department of
-    branch of
-    belonging to department
-    working in department
-    faculty of department
-    students of department
-    """
-    },
 {
   "name": "subject_realisation",
   "type": "realisation_rules",
@@ -148,138 +80,66 @@ enrolled in subject
 }
 ,
 {
-  "name": "faculty_realisation",
+  "name": "teacher_realisation",
   "type": "realisation_rules",
   "priority": 0,
 
   "content": """
-You MUST detect and extract faculty references from the user query.
+You MUST detect and extract teacher references from the user query.
 
-A faculty reference exists whenever the query refers to teaching staff,
-academic personnel, or individual instructors.
+A teacher reference exists whenever the query refers to teaching staff,
+academic personnel, instructors, professors, or individual teachers.
 
-When a faculty reference is present:
-- Extract it as an entity with entity_type = "faculty".
+When a teacher reference is present:
+- Extract it as an entity with entity_type = "teacher".
 - The extracted value MUST be the exact surface form from the user query.
 - Add it to the SQL planning object's entity list.
-- If the reference is role-based (e.g., "faculty", "teachers", "professors"),
-  it MUST still be extracted as a faculty entity.
-- Do NOT treat faculty references as generic users.
-- Do NOT bind faculty references to any table or column at this stage.
+- If the reference is role-based (e.g., "teachers", "faculty", "professors"),
+  it MUST still be extracted as a teacher entity.
+- Do NOT treat teacher references as generic users.
+- Do NOT bind teacher references to any table or column at this stage.
 
-If a specific faculty name is mentioned, extract the name exactly as written.
+If a specific teacher name is mentioned, extract the name exactly as written.
 
-Faculty entities MUST be resolved later to canonical representations
-stored in the faculty table (faculty_id or faculty.name).
+Teacher entities MUST be resolved later to canonical representations
+stored in the teachers table (teachers.id or teachers.name).
 
-Failure to extract a faculty entity when present is an error.
+Failure to extract a teacher entity when present is an error.
 """,
 
   "embedding_text": """
+teacher
+teachers
 faculty
 faculty member
-faculty members
-
 professor
 professors
 lecturer
 lecturers
-teacher
-teachers
-teaching staff
 instructor
 instructors
+teaching staff
+
+teacher name
+faculty name
+professor name
 
 who teaches
-who teaches subject
-who teaches course
-faculty teaching subject
-faculty teaching course
+who is teaching
+teacher for class
+teacher for subject
 
-list faculty
 list teachers
-show faculty
-faculty list
+show teachers
+find teacher
+search teacher
 
-faculty working in department
-faculty of department
-teachers in department
-professors in department
-
-taught by
-handled by
-under professor
-under faculty
+teachers in class
+teachers teaching subject
+teacher assigned to class
 """
-},
-
-
-{
-  "name": "comparison_realisation",
-  "type": "realisation_rules",
-  "priority": 1,
-
-  "content": """
-You MUST detect and extract comparison expressions from the user query.
-
-A comparison expression exists whenever the query compares a quantity,
-count, value, or measurement using relational language.
-
-When a comparison expression is present:
-- Extract it as a comparison constraint.
-- You MUST extract:
-  - the comparison operator (>, <, >=, <=, =)
-  - the compared value exactly as stated in the query
-  - the raw comparison phrase as it appears in the query
-- Do NOT decide which table or column the comparison applies to.
-- Do NOT bind the comparison to any entity, attribute, or schema element.
-
-Comparison constraints MUST remain unbound until deterministic SQL planning.
-
-Failure to extract a comparison expression when present is an error.
-""",
-
-  "embedding_text": """
-more than
-greater than
-above
-over
-exceeding
-higher than
-
-less than
-below
-under
-lower than
-
-at least
-minimum
-no less than
-
-at most
-maximum
-no more than
-
-equal to
-equals
-exactly
-is equal to
-
-greater than or equal to
-less than or equal to
->=
-<=
->
-<
-=
-
-more than 5
-less than 10
-at least 3
-at most 20
-exactly 1
-"""
-},
+}
+,
 {
   "name": "date_realisation",
   "type": "realisation_rules",
@@ -341,110 +201,6 @@ in the past
 recent
 recently
 """
-}
-,
-{
-  "name": "existence_intent_realisation",
-  "type": "realisation_rules",
-  "priority": 2,
-
-  "content": """
-You MUST detect and extract existence intent from the user query.
-
-An existence intent exists whenever the query asks whether something
-exists, is present, is available, or can be found.
-
-When an existence intent is present:
-- Extract the intent explicitly as intent = "exists".
-- Treat yes/no questions as existence intent even if no explicit
-  existence keyword is used.
-- Do NOT decide how existence is evaluated in SQL.
-- Do NOT choose between COUNT, EXISTS, LIMIT, or aggregation strategies.
-- Do NOT bind existence intent to any table, column, or entity.
-
-Existence intent MUST remain abstract until deterministic SQL planning.
-
-Failure to extract existence intent when present is an error.
-""",
-
-  "embedding_text": """
-is there
-are there
-is any
-are there any
-
-exists
-does exist
-does it exist
-exist or not
-
-present
-present or not
-available
-availability
-found
-can be found
-
-can i find
-do we have
-whether there is
-whether exists
-
-is there a
-is there any
-is subject available
-is faculty present
-does a record exist
-"""
-}
-,
-{
-  "name": "query_splitting_realisation",
-  "type": "realisation_rules",
-  "priority": 3,
-  "content": """
-  When the user query explicitly contains multiple independent
-  requests joined by conjunctions, split the query into
-  separate sub-queries.
-
-  Conjunction-indicating words include, but are not limited to:
-  and,
-  also,
-  as well as,
-  along with,
-  plus,
-  additionally.
-
-  A query MUST be split ONLY IF:
-  - each part can stand as a complete query on its own, and
-  - no part depends on the result of another part.
-
-  The split queries MUST preserve the original phrasing
-  of each sub-query without reinterpretation.
-
-  Do NOT split queries when:
-  - conjunctions are used only as filters
-    (e.g., "faculty teaching math and physics"),
-  - the query requires shared joins or shared aggregations,
-  - the query implies a single combined result.
-
-  Query splitting MUST be declarative only.
-  Do NOT decide execution order, joins, or result merging.
-  Those decisions must be handled later by deterministic planning.
-  """,
-
-  "embedding": """
-  and
-  also
-  as well as
-  along with
-  plus
-  additionally
-  list users and count admins
-  show departments and subjects
-  list faculty and list students
-  get users and also show departments
-  """
 }
 ]
 

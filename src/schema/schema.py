@@ -15,7 +15,6 @@ schema = [
         EVENTS represent:
         - exams, assignments, holidays, notices, announcements, circulars
         - academic calendar entries
-        - department-wise or subject-wise scheduled activities
         - upcoming, ongoing, or past events bounded by start_time and end_time
 
         Columns:
@@ -24,19 +23,16 @@ schema = [
         - event_type: category such as exam, holiday, assignment, notice, announcement
         - start_time: datetime when the event starts
         - end_time: datetime when the event ends
-        - department_id: link to departments table
         - subject_id: link to subjects table
         - file_id: source document reference
         - metadata: additional structured or unstructured details
 
         Joins:
-        - events.department_id → departments.id
         - events.subject_id → subjects.id
         - events.file_id → files.id
 
         Filtering rules:
         - Use start_time and end_time for date range queries
-        - Filter by department_id for department-specific events
         - Filter by subject_id for subject-specific events
         - event_type is used to distinguish exams, holidays, assignments, and notices
         """,
@@ -54,237 +50,386 @@ schema = [
         events today events this week events this month
         events between dates events in date range
 
-        department wise events department specific notices
         subject wise events subject related exams assignments
-        events related to a department events related to a subject
+        events related to a subject
 
         when is the exam
         what events are coming up
         show upcoming academic events
         list holidays this month
         what assignments are due
-        events for a specific department
         events for a specific subject
         """
     }
     ,
     {
-        "name": "faculty_subjects",
-        "type": "schema_guidance",
-        "priority": 3,
-        "active": True,
+    "name": "subjects",
+    "type": "schema_guidance",
+    "priority": 4,
+    "active": True,
 
-        "content": """
-        This guidance defines the FACULTY_SUBJECTS table.
+    "content": """
+    This guidance defines the SUBJECTS table.
 
-        Use this table when the user asks about which faculty teaches which subject, or about teaching assignments.
+    Use this table when the user refers to academic subjects or courses
+    that are part of a curriculum or timetable.
 
-        FACULTY_SUBJECTS represents the mapping between faculty members and the subjects they teach.
+    SUBJECTS represents individual subjects such as
+    Data Structures, Operating Systems, DBMS, Mathematics, etc.
 
-        Each row corresponds to one teaching assignment.
+    Table schema:
+    - id: unique subject identifier (UUID)
+    - subject_code: official subject or course code
+    - subject_name: full subject name
 
-        Columns:
-        - id: unique teaching assignment identifier
-        - faculty_id: reference to the faculty member
-        - subject_id: reference to the subject being taught
-        - department_id: department offering the subject
-        - created_at: timestamp when the assignment was created
+    Semantics:
+    - Each row represents exactly one subject
+    - subject_code uniquely identifies a subject within an institution
+    - subject_name is the human-readable name of the subject
 
-        Joins:
-        - faculty_subjects.faculty_id → faculty.id
-        - faculty_subjects.subject_id → subjects.id
-        - faculty_subjects.department_id → departments.id
+    Resolution rules:
+    - Resolve subjects using subject_code when available
+    - Otherwise resolve using subject_name
 
-        Usage rules:
-        - Use faculty_id to fetch subjects taught by a faculty member
-        - Use subject_id to fetch faculty teaching a subject
-        - Use department_id for department-wise teaching assignments
-        - This table does NOT contain timetable or class session timing information
-        """,
+    Usage notes:
+    - SUBJECTS stores only subject identity information
+    - Relationships to faculty, classes, or timetables are handled
+      through separate relationship tables
+    """,
 
-            "embedding_text": """
-        faculty subjects table teaching assignments faculty subject mapping
+    "embedding_text": """
+    subjects table
+    academic subjects
+    courses offered
+    subject list
+    list of subjects
 
-        who teaches which subject
-        subjects taught by a faculty
-        faculty teaching a subject
-        faculty wise subject allocation
-        subject wise faculty allocation
+    subject code
+    course code
+    subject identifier
 
-        department wise teaching assignments
-        department faculty subject mapping
-        subjects offered by a department and faculty
+    subject name
+    course name
 
-        faculty workload teaching load
-        number of subjects per faculty
-        faculty allocation for subjects
+    data structures
+    operating systems
+    dbms
+    mathematics
+    physics
+    chemistry
 
-        teaching assignment data
-        faculty subject relationship
-        which faculty handles a subject
-        """
-    }
+    subjects in timetable
+    subjects in curriculum
+    """
+}
+
     ,
     {
-        "name": "departments",
-        "type": "schema_guidance",
-        "priority": 4,
-        "active": True,
+    "name": "teachers",
+    "type": "schema_guidance",
+    "priority": 4,
+    "active": True,
 
-        "content": """
-        This guidance defines the DEPARTMENTS table.
+    "content": """
+    This guidance defines the TEACHERS table.
 
-        Use this table when the user asks about academic departments, branches, or organizational units.
+    Use this table when the user refers to teachers, faculty members,
+    instructors, professors, or teaching staff.
 
-        DEPARTMENTS represents academic units such as CSE, ECE, Mechanical, Civil, IT, etc.
+    TEACHERS represents individual teaching staff of the institution.
 
-        Columns:
-        - id: unique department identifier
-        - name: full department name
-        - short_code: abbreviated department code
-        - aliases: alternative or informal names for the department
+    Table schema:
+    - id: unique teacher identifier (UUID)
+    - name: full name of the teacher
+    - email: official or known email address (nullable)
 
-        Joins:
-        - departments.id → events.department_id
-        - departments.id → faculty_subjects.department_id
-        - departments.id → subjects.department_id
+    Semantics:
+    - Each row represents exactly one teacher
+    - name is the primary human identifier
+    - email, when present, is unique per teacher
 
-        Usage rules:
-        - Resolve departments using name, short_code, or aliases
-        - Use department id as the root filter for department-wise queries
-        - Departments act as a parent entity for subjects, faculty assignments, and events
-        """,
+    Resolution rules:
+    - Resolve teachers using email when available
+    - Otherwise resolve using name
+    - Do not infer designation, department, or experience
 
-            "embedding_text": """
-        departments table academic departments branches academic units
+    Usage notes:
+    - TEACHERS stores only teacher identity information
+    - Subject assignments, classes, and schedules are handled
+      through separate relationship tables
+    """,
 
-        cse ece it civil mechanical electrical electronics computer science
-        department names department codes short codes aliases
+    "embedding_text": """
+    teachers table
+    teacher
+    teachers
+    faculty
+    instructor
+    professor
+    lecturer
+    teaching staff
 
-        list of departments
-        how many departments
-        show all departments
-        department information
+    teacher name
+    faculty name
+    instructor name
 
-        department wise data
-        department wise subjects
-        department wise faculty
-        department wise events
-        department activities
+    teacher email
+    faculty email
 
-        college departments university departments
-        branch wise information
-        """
-    }
-    ,
-    {
-        "name": "subjects",
-        "type": "schema_guidance",
-        "priority": 4,
-        "active": True,
+    list teachers
+    find teacher
+    search faculty member
+    """
+}
+,
+{
+    "name": "classes",
+    "type": "schema_guidance",
+    "priority": 4,
+    "active": True,
 
-        "content": """
-        This guidance defines the SUBJECTS table.
+    "content": """
+    This guidance defines the CLASSES table.
 
-        Use this table when the user asks about academic subjects or courses offered as part of a curriculum.
+    Use this table when the user refers to scheduled class sessions,
+    lectures, labs, or periods that occur at a specific time and day.
 
-        SUBJECTS represents individual courses such as Data Structures, Operating Systems, DBMS, etc.
+    CLASSES represents individual timetable entries, not abstract
+    academic groups or grade levels.
 
-        Columns:
-        - id: unique subject identifier
-        - code: official subject or course code
-        - name: subject name
-        - department_id: department offering the subject
-        - credits: credit structure of the subject
+    Table schema:
+    - id: unique class session identifier (UUID)
+    - class_name: name or identifier of the class (e.g. "10A", "CS-3", "B.Tech CSE")
+    - day_of_week: day on which the class occurs (e.g. Monday, Tuesday)
+    - start_time: class start time
+    - end_time: class end time
+    - type: class type (e.g. Lecture, Lab, Tutorial)
+    - room: room or location (nullable)
+    - label: optional short label for the class
+    - notes: additional notes or remarks (nullable)
 
-        Joins:
-        - subjects.department_id → departments.id
-        - subjects.id → events.subject_id
-        - subjects.id → faculty_subjects.subject_id
+    Semantics:
+    - Each row represents one scheduled class session
+    - A class is uniquely identified by class_name + day_of_week + time
+    - This table is time-bound and event-like in nature
 
-        Usage rules:
-        - Resolve subjects using subject code or subject name
-        - Use department_id for department-wise subject queries
-        - Use subject id to fetch related faculty assignments or subject-specific events
-        - SUBJECTS does not store faculty or event timing information directly
-        """,
+    Resolution rules:
+    - Resolve class sessions using class_name, day_of_week, start_time, and end_time
+    - Do not collapse multiple days or times into a single row
+    - Do not infer teachers or subjects from this table alone
 
-            "embedding_text": """
-        subjects table academic subjects courses course catalog curriculum
+    Usage notes:
+    - CLASSES stores scheduling information only
+    - Relationships to teachers or subjects are handled via
+      separate relationship tables
+    """,
+    
 
-        course code subject code
-        course name subject name
-        credits credit structure credit count
+    "embedding_text": """
+    classes table
+    class schedule
+    timetable
+    class session
+    lecture schedule
+    lab schedule
 
-        subjects offered by department
-        department wise subjects
-        courses offered by a department
+    class name
+    class section
+    class group
 
-        which faculty teaches a subject
-        subject faculty mapping
-        faculty for a subject
+    day of week
+    class day
+    monday tuesday wednesday thursday friday
 
-        subject wise events
-        events related to a subject
-        exams assignments notices for a subject
+    start time
+    end time
+    class timing
+    period time
 
-        list of subjects
-        show all subjects
-        """
-    }
-    ,
-    {
-        "name": "faculty",
-        "type": "schema_guidance",
-        "priority": 4,
-        "active": True,
+    lecture
+    lab
+    tutorial
 
-        "content": """
-        This guidance defines the FACULTY table.
+    classroom
+    room number
 
-        Use this table when the user asks about academic faculty members, instructors, professors, or teaching staff.
+    timetable entry
+    scheduled class
+    """
+},
+{
+  "name": "day_time_realisation",
+  "type": "realisation_rules",
+  "priority": 1,
 
-        FACULTY represents individual academic staff profiles of the institution.
+  "content": """
+You MUST detect and extract day-of-week and time references
+from the user query when present.
 
-        Columns:
-        - id: unique faculty identifier
-        - name: full name of the faculty member
-        - designation: academic designation or role
-        - email: official email address
-        - contact_no: contact phone number
-        - joining_date: date when the faculty joined the institution
-        - experience_years: total academic or industry experience
-        - created_at: record creation timestamp
-        - updated_at: record last update timestamp
+A day-of-week reference exists whenever the query mentions
+a weekday explicitly or implicitly.
 
-        Joins:
-        - faculty.id → faculty_subjects.faculty_id
+A time reference exists whenever the query mentions a specific
+time or time range.
 
-        Usage rules:
-        - Resolve faculty entities using name, email, or designation
-        - Use faculty id to fetch subjects taught via faculty_subjects
-        - FACULTY does not directly store subject, department, or event data
-        """,
+When such references are present:
+- Extract day_of_week as a string
+  (e.g. "Monday", "Tuesday").
+- Extract start_time and end_time when a time range is mentioned.
+- Preserve the raw surface phrases as written in the query.
 
-            "embedding_text": """
-        faculty table academic faculty teaching staff professors lecturers instructors
+Do NOT treat days or times as entities.
+Do NOT bind them to any table or column at this stage.
+Do NOT infer schedule structure or joins.
 
-        faculty profile faculty details
-        faculty name designation email contact
-        faculty experience years joining date
+These values MUST remain unbound constraints until
+deterministic SQL planning.
+""",
 
-        which subjects does a faculty teach
-        subjects taught by faculty
-        faculty subject mapping
+  "embedding_text": """
+monday
+tuesday
+wednesday
+thursday
+friday
+saturday
+sunday
 
-        list faculty
-        find faculty member
-        search professor lecturer instructor
+today
+tomorrow
+yesterday
 
-        department faculty
-        academic staff information
-        """
-    }
+morning
+afternoon
+evening
+
+at 9
+9 am
+10 am
+between 9 and 11
+from 10 to 12
+before 11
+after 2
+
+first period
+second period
+last period
+
+class time
+period time
+lecture time
+"""
+}
+,
+{
+    "name": "class_subjects",
+    "type": "schema_guidance",
+    "priority": 5,
+    "active": True,
+
+    "content": """
+    This guidance defines the CLASS_SUBJECTS table.
+
+    Use this table to represent the relationship between
+    scheduled class sessions and academic subjects.
+
+    CLASS_SUBJECTS links one class session to one subject.
+
+    Table schema:
+    - id: unique relationship identifier (UUID)
+    - class_id: references classes.id
+    - subject_id: references subjects.id
+
+    Semantics:
+    - Each row represents one subject being taught
+      in one specific class session
+    - This is a pure relationship table
+    - No additional attributes are stored here
+
+    Resolution rules:
+    - Do NOT resolve using text or embeddings
+    - class_id and subject_id must already exist
+    - Insert only after both classes and subjects
+      have been resolved and assigned IDs
+
+    Usage notes:
+    - CLASS_SUBJECTS contains no timing, teacher,
+      or room information
+    - Avoid duplicate entries for the same
+      (class_id, subject_id) pair
+    """,
+
+    "embedding_text": """
+    class subjects
+    class subject mapping
+    subject taught in class
+    subject for a class
+
+    class to subject relationship
+    timetable subject mapping
+
+    which subject is taught in this class
+    subject assigned to class
+    """
+}
+,
+{
+    "name": "class_teachers",
+    "type": "schema_guidance",
+    "priority": 5,
+    "active": True,
+
+    "content": """
+    This guidance defines the CLASS_TEACHERS table.
+
+    Use this table to represent which teacher teaches
+    a specific scheduled class session.
+
+    CLASS_TEACHERS links teachers to individual
+    class timetable entries.
+
+    Table schema:
+    - id: unique relationship identifier (UUID)
+    - class_id: references classes.id
+    - teacher_id: references teachers.id
+    - role: optional role of the teacher in the class
+      (e.g. "Instructor", "Lab Assistant", "Co-Teacher")
+
+    Semantics:
+    - Each row represents one teacher assigned to one
+      specific class session
+    - Multiple teachers may be assigned to the same class
+      (e.g. labs, team teaching)
+    - A teacher may appear in many class sessions
+
+    Resolution rules:
+    - Do NOT resolve using text or embeddings
+    - class_id and teacher_id must already exist
+    - Insert only after both classes and teachers
+      have been resolved and assigned IDs
+
+    Usage notes:
+    - CLASS_TEACHERS is time-bound and schedule-specific
+    - Do not infer subjects from this table
+    - Avoid duplicate entries for the same
+      (class_id, teacher_id, role) combination
+    """,
+
+    "embedding_text": """
+    class teachers
+    teacher assigned to class
+    teacher for class session
+    who teaches this class
+
+    class teacher mapping
+    timetable teacher assignment
+
+    teacher role in class
+    instructor
+    lab assistant
+    co teacher
+    """
+}
 ]
 
 
