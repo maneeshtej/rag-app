@@ -5,79 +5,45 @@ realisation_rules: list[dict] = [
   "priority": 0,
 
   "content": """
-You MUST detect and extract subject references from the user query.
+Detect and extract subject references from the user query when they are clearly present.
 
-A subject reference exists whenever the query mentions an academic subject,
-course, paper, or named topic that maps to a subject.
+A subject reference exists when the query explicitly mentions an academic subject,
+course, paper, or named academic topic.
 
-When a subject reference is present:
+When a subject reference is clearly present:
 - Extract it as an entity with entity_type = "subject".
-- The extracted value MUST be the exact surface form from the user query.
-- Add it to the SQL planning object's entity list.
+- raw_value MUST be the exact surface form from the user query.
+- Add it to the extracted entities list.
 - Do NOT treat subject mentions as plain text filters.
 - Do NOT bind the subject to any table or column at this stage.
 
-Subject entities MUST be resolved later to a canonical representation
-(subject_id or subject_name).
+If the presence of a subject is ambiguous or uncertain, do NOT extract it.
 
-Failure to extract a subject entity when present is an error.
+Subject entities are resolved later to canonical representations.
 """,
 
   "embedding_text": """
 subject
-course
-paper
 academic subject
+course
+academic course
+named course
+subject name
+course name
+paper
+curriculum
+syllabus
+academic topic
 
-operating systems
-os
-operating system course
-
-data structures
-dsa
-data structures course
-
-database systems
-dbms
-database subject
-
-computer networks
-cn
-networking subject
-
-machine learning
-ml
-machine learning course
-
-artificial intelligence
-ai
-ai subject
-
-software engineering
-se
-software engineering course
-
-compiler design
-compiler
-compiler course
-
-theory of computation
-toc
-automata
-
-mathematics
-maths
-physics
-chemistry
-
-teach subject
 teaches subject
-subject taught by
-faculty teaching subject
-who teaches
+subject taught
 enrolled in subject
+subject offering
+course offering
 """
 }
+
+
 ,
 {
   "name": "teacher_realisation",
@@ -85,40 +51,36 @@ enrolled in subject
   "priority": 0,
 
   "content": """
-You MUST detect and extract teacher references from the user query.
+Detect and extract teacher references from the user query when they are clearly present.
 
-A teacher reference exists whenever the query refers to teaching staff,
+A teacher reference exists when the query explicitly refers to teaching staff,
 academic personnel, instructors, professors, or individual teachers.
 
-When a teacher reference is present:
+When a teacher reference is clearly present:
 - Extract it as an entity with entity_type = "teacher".
-- The extracted value MUST be the exact surface form from the user query.
-- Add it to the SQL planning object's entity list.
-- If the reference is role-based (e.g., "teachers", "faculty", "professors"),
-  it MUST still be extracted as a teacher entity.
+- raw_value MUST be the exact surface form from the user query.
+- Add it to the extracted entities list.
 - Do NOT treat teacher references as generic users.
 - Do NOT bind teacher references to any table or column at this stage.
 
-If a specific teacher name is mentioned, extract the name exactly as written.
+Role-based references (e.g., "teachers", "faculty", "professors") are valid
+teacher entities and should be extracted as written.
 
-Teacher entities MUST be resolved later to canonical representations
-stored in the teachers table (teachers.id or teachers.name).
+If the presence of a teacher reference is ambiguous or uncertain, do NOT extract it.
 
-Failure to extract a teacher entity when present is an error.
+Teacher entities are resolved later to canonical representations.
 """,
 
   "embedding_text": """
 teacher
 teachers
+teaching staff
+academic staff
 faculty
 faculty member
 professor
-professors
 lecturer
-lecturers
 instructor
-instructors
-teaching staff
 
 teacher name
 faculty name
@@ -126,19 +88,13 @@ professor name
 
 who teaches
 who is teaching
+teaches
+teaching
 teacher for class
 teacher for subject
-
-list teachers
-show teachers
-find teacher
-search teacher
-
-teachers in class
-teachers teaching subject
-teacher assigned to class
 """
 }
+
 ,
 {
   "name": "date_realisation",
@@ -146,26 +102,38 @@ teacher assigned to class
   "priority": 1,
 
   "content": """
-You MUST detect and extract date and time references from the user query.
+Detect and extract date and time references from the user query when they are clearly present.
 
-A date reference exists whenever the query mentions a specific date,
+A date reference exists when the query explicitly mentions a specific date,
 a relative date, or a time range.
 
-When a date reference is present:
+When a date reference is clearly present:
 - Extract it as a date constraint.
-- You MUST extract:
-  - start_date (if applicable)
-  - end_date (if applicable)
-  - the raw date phrase exactly as it appears in the query
-- Do NOT bind date constraints to any table, column, or entity.
-- Do NOT infer how the date will be used in SQL.
+- raw_value MUST be the exact surface form from the user query.
+- Normalize dates into Python-parsable ISO format (YYYY-MM-DD) when and only when
+  the date can be determined with high confidence.
+- start_date and end_date MUST either be:
+  - valid ISO dates (YYYY-MM-DD), or
+  - null if normalization is uncertain.
 
-Date constraints MUST remain unbound until deterministic SQL planning.
+Do NOT invent dates.
+Do NOT approximate vague expressions.
+Do NOT bind date constraints to any table, column, or entity.
+Do NOT infer how the date will be used later.
 
-Failure to extract a date constraint when present is an error.
+If the presence of a date is ambiguous or normalization is uncertain,
+preserve raw_value and set both start_date and end_date to null.
 """,
 
   "embedding_text": """
+date
+time
+day
+month
+year
+time period
+date range
+
 today
 yesterday
 tomorrow
@@ -187,21 +155,59 @@ from
 until
 till
 
-before date
-after date
-between dates
-from date
-till date
-
 on date
 on day
 during period
 within range
-in the past
 recent
 recently
 """
+},
+{
+  "name": "query_split_realisation",
+  "type": "realisation_rules",
+  "priority": 2,
+  "content": """
+Detect when a user query contains multiple independent requests that should be split into separate semantic sub-queries.
+
+A split is REQUIRED when:
+- The query contains coordinating conjunctions such as "and", "also", "then", "as well as".
+- Each clause expresses an independent intent that can be answered on its own.
+- Each clause targets different actions, intents, or primary entities.
+
+When splitting:
+- Produce one sub-query per independent clause.
+- Each sub-query MUST be a complete, standalone question.
+- Each sub-query MUST include only the entities relevant to that clause.
+- Do NOT duplicate entities across sub-queries unless they are explicitly shared.
+
+Do NOT split when:
+- The conjunction joins multiple entities for the same intent (e.g. "subjects taught by A and B").
+- The conjunction refines or elaborates a single request.
+
+If splitting is ambiguous, DO NOT split.
+""",
+  "embedding_text": """
+and
+also
+then
+as well as
+along with
+separately
+another
+additionally
+in addition
+next
+after that
+first
+second
+multiple requests
+separate queries
+two questions
+more than one task
+"""
 }
+
 ]
 
 

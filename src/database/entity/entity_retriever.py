@@ -20,7 +20,6 @@ class EntityRetriever:
 
             rows = self._similarity_search(entity_type, embedding, hard_k)
             filtered = self._apply_soft_hard(rows, soft_k, threshold)
-            # hydrated = self._hydrate(filtered)
 
             # 🔹 populate in-place
             q["resolved"] = filtered

@@ -11,7 +11,7 @@ class GuidanceRetriever:
         *,
         query: str,
         type: str,
-        soft_k: int = 3,
+        soft_k: int = 5,
         hard_k: int = 8,
         min_similarity: float = 0.65,
     ) -> list[GuidanceIngest]:

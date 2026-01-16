@@ -71,58 +71,87 @@ schema = [
     "content": """
     This guidance defines the SUBJECTS table.
 
-    Use this table when the user refers to academic subjects or courses
-    that are part of a curriculum or timetable.
+    Purpose:
+    SUBJECTS stores canonical academic subject identities
+    that are part of an institution’s curriculum.
 
-    SUBJECTS represents individual subjects such as
+    This table represents subjects such as
     Data Structures, Operating Systems, DBMS, Mathematics, etc.
+    It does NOT represent teaching assignments, schedules, or faculty involvement.
 
     Table schema:
     - id: unique subject identifier (UUID)
     - subject_code: official subject or course code
-    - subject_name: full subject name
+    - subject_name: full human-readable subject name
 
     Semantics:
-    - Each row represents exactly one subject
+    - Each row represents exactly one academic subject
     - subject_code uniquely identifies a subject within an institution
-    - subject_name is the human-readable name of the subject
+    - subject_name is descriptive and not guaranteed to be unique
 
-    Resolution rules:
-    - Resolve subjects using subject_code when available
-    - Otherwise resolve using subject_name
+    Identity & resolution:
+    - Subjects may be resolved using subject_code when available
+    - Otherwise, subject_name may be used as a fallback identifier
+    - No inference beyond identity resolution is permitted
 
-    Usage notes:
-    - SUBJECTS stores only subject identity information
-    - Relationships to faculty, classes, or timetables are handled
-      through separate relationship tables
+    Non-goals / exclusions:
+    - SUBJECTS does NOT store teacher information
+    - SUBJECTS does NOT store class or timetable information
+    - SUBJECTS does NOT encode teaching relationships
+
+    All relationships involving subjects
+    (e.g. classes, teachers, events)
+    are defined and enforced outside this table
+    via explicit relationship rules.
+
     """,
 
     "embedding_text": """
     subjects table
-    academic subjects
-    courses offered
-    subject list
-    list of subjects
+    academic subject
+    academic course
+    course subject
+    curriculum subject
 
-    subject code
-    course code
-    subject identifier
+    list of subjects
+    available subjects
+    subjects offered
+    subjects in curriculum
+    academic courses offered
 
     subject name
     course name
+    subject title
+    course title
+
+    subject code
+    course code
+    academic code
+    course identifier
 
     data structures
     operating systems
     dbms
+    database management systems
+    computer networks
     mathematics
     physics
     chemistry
+    artificial intelligence
+    machine learning
+    software engineering
 
-    subjects in timetable
-    subjects in curriculum
+    undergraduate subjects
+    postgraduate subjects
+    core subjects
+    elective subjects
+
+    subject details
+    subject information
+    subject record
+
     """
 }
-
     ,
     {
     "name": "teachers",
@@ -133,52 +162,83 @@ schema = [
     "content": """
     This guidance defines the TEACHERS table.
 
-    Use this table when the user refers to teachers, faculty members,
-    instructors, professors, or teaching staff.
+    Purpose:
+    TEACHERS stores canonical identity information
+    for teaching staff within the institution.
 
-    TEACHERS represents individual teaching staff of the institution.
+    This table represents individual teachers such as
+    faculty members, instructors, professors, or lecturers.
+    It does NOT represent teaching assignments, schedules,
+    subjects taught, or class involvement.
 
     Table schema:
     - id: unique teacher identifier (UUID)
-    - name: full name of the teacher
+    - name: full human-readable name of the teacher
     - email: official or known email address (nullable)
 
     Semantics:
     - Each row represents exactly one teacher
     - name is the primary human identifier
-    - email, when present, is unique per teacher
+    - email, when present, uniquely identifies a teacher
 
-    Resolution rules:
-    - Resolve teachers using email when available
-    - Otherwise resolve using name
-    - Do not infer designation, department, or experience
+    Identity & resolution:
+    - Teachers may be resolved using email when available
+    - Otherwise, name may be used as a fallback identifier
+    - No inference of designation, department, role, or experience is permitted
 
-    Usage notes:
-    - TEACHERS stores only teacher identity information
-    - Subject assignments, classes, and schedules are handled
-      through separate relationship tables
+    Non-goals / exclusions:
+    - TEACHERS does NOT encode subject assignments
+    - TEACHERS does NOT encode class schedules
+    - TEACHERS does NOT encode teaching relationships
+
+    All relationships involving teachers
+    (e.g. subjects taught, classes handled)
+    are defined and enforced outside this table
+    via explicit relationship and join rules.
+
     """,
 
     "embedding_text": """
-    teachers table
-    teacher
-    teachers
-    faculty
-    instructor
-    professor
-    lecturer
-    teaching staff
+      teachers table
+      teacher
+      teachers
+      faculty
+      faculty member
+      instructor
+      course instructor
+      professor
+      lecturer
+      teaching staff
+      staff member
 
-    teacher name
-    faculty name
-    instructor name
+      teacher name
+      faculty name
+      instructor name
+      professor name
+      lecturer name
 
-    teacher email
-    faculty email
+      teacher email
+      faculty email
+      instructor email
+      professor email
 
-    list teachers
-    find teacher
-    search faculty member
+      list teachers
+      show teachers
+      find teacher
+      search teacher
+      search faculty member
+      show instructors
+      show professors
+
+      teacher details
+      faculty details
+      teacher information
+      faculty profile
+      professor information
+
+      who is the teacher
+      who is the instructor
+      who is the professor
     """
 }
 ,
@@ -191,11 +251,13 @@ schema = [
     "content": """
     This guidance defines the CLASSES table.
 
-    Use this table when the user refers to scheduled class sessions,
-    lectures, labs, or periods that occur at a specific time and day.
+    Purpose:
+    CLASSES stores scheduled class session entries
+    that occur at a specific time and day.
 
-    CLASSES represents individual timetable entries, not abstract
-    academic groups or grade levels.
+    This table represents individual timetable sessions
+    (e.g. lectures, labs, tutorials),
+    not abstract academic groups, batches, or grade levels.
 
     Table schema:
     - id: unique class session identifier (UUID)
@@ -206,22 +268,28 @@ schema = [
     - type: class type (e.g. Lecture, Lab, Tutorial)
     - room: room or location (nullable)
     - label: optional short label for the class
-    - notes: additional notes or remarks (nullable)
+    - notes: additional remarks (nullable)
 
     Semantics:
-    - Each row represents one scheduled class session
-    - A class is uniquely identified by class_name + day_of_week + time
+    - Each row represents exactly one scheduled class session
+    - A class session is uniquely identified by its name, day, and time window
     - This table is time-bound and event-like in nature
 
-    Resolution rules:
-    - Resolve class sessions using class_name, day_of_week, start_time, and end_time
-    - Do not collapse multiple days or times into a single row
-    - Do not infer teachers or subjects from this table alone
+    Identity & resolution:
+    - Class sessions may be identified using class_name,
+      day_of_week, start_time, and end_time in combination
+    - No collapsing or merging of multiple sessions is permitted
 
-    Usage notes:
-    - CLASSES stores scheduling information only
-    - Relationships to teachers or subjects are handled via
-      separate relationship tables
+    Non-goals / exclusions:
+    - CLASSES does NOT encode teachers assigned to the class
+    - CLASSES does NOT encode subjects taught in the class
+    - CLASSES does NOT encode academic groups or student batches
+
+    All relationships involving classes
+    (e.g. teachers, subjects, schedules)
+    are defined and enforced outside this table
+    via explicit relationship and join rules.
+
     """,
     
 
@@ -255,70 +323,13 @@ schema = [
 
     timetable entry
     scheduled class
+
+    what classes are scheduled
+    classes today
+    classes on monday
+    class schedule for today
+
     """
-},
-{
-  "name": "day_time_realisation",
-  "type": "realisation_rules",
-  "priority": 1,
-
-  "content": """
-You MUST detect and extract day-of-week and time references
-from the user query when present.
-
-A day-of-week reference exists whenever the query mentions
-a weekday explicitly or implicitly.
-
-A time reference exists whenever the query mentions a specific
-time or time range.
-
-When such references are present:
-- Extract day_of_week as a string
-  (e.g. "Monday", "Tuesday").
-- Extract start_time and end_time when a time range is mentioned.
-- Preserve the raw surface phrases as written in the query.
-
-Do NOT treat days or times as entities.
-Do NOT bind them to any table or column at this stage.
-Do NOT infer schedule structure or joins.
-
-These values MUST remain unbound constraints until
-deterministic SQL planning.
-""",
-
-  "embedding_text": """
-monday
-tuesday
-wednesday
-thursday
-friday
-saturday
-sunday
-
-today
-tomorrow
-yesterday
-
-morning
-afternoon
-evening
-
-at 9
-9 am
-10 am
-between 9 and 11
-from 10 to 12
-before 11
-after 2
-
-first period
-second period
-last period
-
-class time
-period time
-lecture time
-"""
 }
 ,
 {
@@ -330,10 +341,13 @@ lecture time
     "content": """
     This guidance defines the CLASS_SUBJECTS table.
 
-    Use this table to represent the relationship between
+    Purpose:
+    CLASS_SUBJECTS encodes the relationship between
     scheduled class sessions and academic subjects.
 
-    CLASS_SUBJECTS links one class session to one subject.
+    This table exists ONLY to support relational joins.
+    It does NOT represent standalone domain entities
+    and MUST NOT be queried as a primary data source.
 
     Table schema:
     - id: unique relationship identifier (UUID)
@@ -341,35 +355,37 @@ lecture time
     - subject_id: references subjects.id
 
     Semantics:
-    - Each row represents one subject being taught
-      in one specific class session
-    - This is a pure relationship table
-    - No additional attributes are stored here
+    - Each row links exactly one class session to one subject
+    - This is a pure relationship (join) table
+    - No descriptive, temporal, or identity data is stored here
 
-    Resolution rules:
-    - Do NOT resolve using text or embeddings
-    - class_id and subject_id must already exist
-    - Insert only after both classes and subjects
-      have been resolved and assigned IDs
+    Identity & resolution:
+    - Entries MUST be referenced only via existing class_id and subject_id
+    - This table MUST NOT be resolved using text or embeddings
+    - No inference or lookup is permitted at this level
 
-    Usage notes:
-    - CLASS_SUBJECTS contains no timing, teacher,
-      or room information
-    - Avoid duplicate entries for the same
-      (class_id, subject_id) pair
+    Usage constraints (STRICT):
+    - CLASS_SUBJECTS MUST NOT be selected from directly
+    - CLASS_SUBJECTS MUST be used only as part of an explicit join path
+    - Filtering logic MUST be applied on parent tables
+      (e.g. CLASSES or SUBJECTS), not on this table
+
+    All valid join paths involving this table
+    are defined and enforced via explicit schema join rules.
+
     """,
 
     "embedding_text": """
-    class subjects
-    class subject mapping
-    subject taught in class
-    subject for a class
+    class_subjects table
+    class to subject mapping
+    class subject relationship
+    class subject link
+    timetable subject association
 
-    class to subject relationship
-    timetable subject mapping
+    class_id subject_id mapping
+    relationship table
+    join table
 
-    which subject is taught in this class
-    subject assigned to class
     """
 }
 ,
@@ -382,11 +398,13 @@ lecture time
     "content": """
     This guidance defines the CLASS_TEACHERS table.
 
-    Use this table to represent which teacher teaches
-    a specific scheduled class session.
+    Purpose:
+    CLASS_TEACHERS encodes the relationship between
+    teachers and scheduled class sessions.
 
-    CLASS_TEACHERS links teachers to individual
-    class timetable entries.
+    This table exists ONLY to support relational joins.
+    It does NOT represent standalone domain entities
+    and MUST NOT be queried as a primary data source.
 
     Table schema:
     - id: unique relationship identifier (UUID)
@@ -396,38 +414,38 @@ lecture time
       (e.g. "Instructor", "Lab Assistant", "Co-Teacher")
 
     Semantics:
-    - Each row represents one teacher assigned to one
-      specific class session
+    - Each row links exactly one teacher to one class session
     - Multiple teachers may be assigned to the same class
-      (e.g. labs, team teaching)
     - A teacher may appear in many class sessions
+    - This is a pure relationship (join) table
 
-    Resolution rules:
-    - Do NOT resolve using text or embeddings
-    - class_id and teacher_id must already exist
-    - Insert only after both classes and teachers
-      have been resolved and assigned IDs
+    Identity & resolution:
+    - Entries MUST be referenced only via existing class_id and teacher_id
+    - This table MUST NOT be resolved using text or embeddings
+    - No inference or lookup is permitted at this level
 
-    Usage notes:
-    - CLASS_TEACHERS is time-bound and schedule-specific
-    - Do not infer subjects from this table
-    - Avoid duplicate entries for the same
-      (class_id, teacher_id, role) combination
+    Usage constraints (STRICT):
+    - CLASS_TEACHERS MUST NOT be selected from directly
+    - CLASS_TEACHERS MUST be used only as part of an explicit join path
+    - Filtering logic MUST be applied on parent tables
+      (e.g. CLASSES or TEACHERS), not on this table
+
+    All valid join paths involving this table
+    are defined and enforced via explicit schema join rules.
+
     """,
 
     "embedding_text": """
-    class teachers
-    teacher assigned to class
-    teacher for class session
-    who teaches this class
+    class_teachers table
+    class to teacher mapping
+    teacher class relationship
+    class teacher link
 
-    class teacher mapping
-    timetable teacher assignment
+    class_id teacher_id mapping
+    relationship table
+    join table
 
     teacher role in class
-    instructor
-    lab assistant
-    co teacher
     """
 }
 ]
