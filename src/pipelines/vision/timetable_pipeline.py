@@ -9,6 +9,8 @@ import base64
 import mimetypes
 import re
 
+from src.database.entity.entity_ingestor import EntityIngestor
+
 test_output = {'class_details': {'class_name': 'VII(A)',
   'department': 'Computer Science & Engineering',
   'academic_year': '2025-26',
@@ -449,7 +451,7 @@ class TimetablePipeline:
     def __init__(self, *, vision_llm, conn, entity_ingestor):
         self.vision_llm = vision_llm    # vision Gemini
         self.conn = conn
-        self.entity_ingestor = entity_ingestor
+        self.entity_ingestor:EntityIngestor = entity_ingestor
 
     def pass1_extract(self, text: str) -> dict:
         response = self.llm.invoke(text)
@@ -473,6 +475,47 @@ class TimetablePipeline:
 
       return f"data:image/png;base64,{encoded}"
     
+    import re
+
+    def _text_variants(self, text: str) -> list[str]:
+        base = text.strip()
+
+        variants = set()
+
+        # original + basic casing
+        variants.add(base)
+        variants.add(base.lower())
+        variants.add(base.title())
+
+        # remove dots / punctuation
+        no_punct = re.sub(r"[^\w\s]", "", base)
+        variants.add(no_punct)
+        variants.add(no_punct.lower())
+        variants.add(no_punct.title())
+
+        # normalize whitespace
+        normalized_space = re.sub(r"\s+", " ", no_punct).strip()
+        variants.add(normalized_space)
+        variants.add(normalized_space.lower())
+        variants.add(normalized_space.title())
+
+        # split words (for partial matches)
+        parts = normalized_space.split()
+        for p in parts:
+            variants.add(p)
+            variants.add(p.lower())
+            variants.add(p.title())
+
+        # join words (handles things like "HighPerformanceComputing")
+        joined = "".join(parts)
+        if joined:
+            variants.add(joined)
+            variants.add(joined.lower())
+            variants.add(joined.title())
+
+        return list(variants)
+
+    
     def _resolve_subject(self, *, subject_code: str, subject_name: str) -> UUID:
       with self.conn.cursor() as cur:
           cur.execute(
@@ -493,18 +536,28 @@ class TimetablePipeline:
           )
           subject_id =  cur.fetchone()[0]
 
+      subject_name_variants = self._text_variants(subject_name)
+
+      
       self.entity_ingestor.ingest([{
           "entity_type": "subject",
           "entity_id": subject_id,
           "surface_form": subject_name,
           "source_table": "subjects",
-          "embedding_text": [
-            subject_name,
-            subject_name.lower(),
-            subject_name.title(),
-            subject_code,
-        ]
-      }])
+          "source_column": "subject_name",
+          "embedding_text": subject_name_variants
+        }])
+      
+      self.entity_ingestor.ingest([{
+          "entity_type": "subject_code",
+          "entity_id": subject_id,
+          "surface_form": subject_code,
+          "source_table": "subjects",
+          "source_column": "subject_code",
+          "embedding_text": subject_code
+        }])
+
+
 
       return subject_id
 
@@ -539,9 +592,15 @@ class TimetablePipeline:
             variants.add(p.title())
 
         return list(variants)
+    
+    def _email_variants(self, email: str) -> list[str]:
+      e = email.strip()
+      return [
+          e,
+          e.lower()
+      ]
 
 
-      
     def _resolve_teacher(self, *, name: str, email: str | None) -> UUID:
       with self.conn.cursor() as cur:
           if email:
@@ -570,15 +629,28 @@ class TimetablePipeline:
               teacher_id = cur.fetchone()[0]
 
       # ---- ENTITY INGESTION ----
-      variants = self._teacher_name_variants(name)
+      name_variants = self._teacher_name_variants(name)
+      email_variants = self._email_variants(email) if email else []
 
+      
       self.entity_ingestor.ingest([{
           "entity_type": "teacher",
           "entity_id": teacher_id,
           "surface_form": name,
           "source_table": "teachers",
-          "embedding_text": variants
-      }])
+          "source_column": "name",
+          "embedding_text": name_variants
+          }])
+
+      
+      self.entity_ingestor.ingest([{
+          "entity_type": "teacher",
+          "entity_id": teacher_id,
+          "surface_form": email,
+          "source_table": "teachers",
+          "source_column": "email",
+          "embedding_text": email_variants
+          }])
 
       return teacher_id
 

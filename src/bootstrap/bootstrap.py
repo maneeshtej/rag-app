@@ -1,4 +1,5 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from psycopg import Connection
 
 from src.database.entity.entity_ingestor import EntityIngestor
 from src.database.entity.entity_retriever import EntityRetriever
@@ -6,7 +7,7 @@ from src.database.entity.entity_store import EntityStore
 from src.database.guidance import guidance_store
 from src.database.guidance.guidance_ingestor import GuidanceIngestor
 from src.database.llm import create_groq_llm
-from src.database.db import get_connection
+from src.database.db import get_connection, get_dev_connection
 from src.database.guidance.guidance_retriever import GuidanceRetriever
 from src.database.sql.sql_ingestion import SQLIngester
 from src.database.sql.sql_retriever import SQLRetriever
@@ -25,6 +26,9 @@ from src.pipelines.answer_pipeline import AnswerPipeline
 from src.pipeline import MainPipeline
 
 # ---------- Shared resources ----------
+
+def create_dev_conn():
+    return get_dev_connection()
 
 def create_entity_store(conn):
     print("loaded entity store")

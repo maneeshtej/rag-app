@@ -10,3 +10,12 @@ def get_connection():
         host="localhost",
         port=5432,
     )
+
+def get_dev_connection():
+    return psycopg2.connect(
+        dbname="rag_app_dev",
+        user="postgres",
+        password="12345",
+        host="localhost",
+        port=5432,
+    )

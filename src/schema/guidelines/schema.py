@@ -6,10 +6,10 @@ schema_rules:list[dict] = [
     "active": True,
 
     "content": """
-    This guidance defines the SUBJECTS table.
+    This guidance defines the subjects table.
 
     Table meaning:
-    The SUBJECTS table stores academic subjects offered by an institution.
+    The subjects table stores academic subjects offered by an institution.
     Each row represents one subject in the curriculum.
 
     Columns:
@@ -103,10 +103,10 @@ academic offerings
     "active": True,
 
     "content": """
-    This defines the TEACHERS table.
+    This defines the teachers table.
 
     Table meaning:
-    The TEACHERS table stores information about teaching staff
+    The teachers table stores information about teaching staff
     within an institution.
 
     Columns:
@@ -190,10 +190,10 @@ staff record
     "active": True,
 
     "content": """
-    This defines the CLASSES table.
+    This defines the classes table.
 
     Table meaning:
-    The CLASSES table stores scheduled class session records
+    The classes table stores scheduled class session records
     that occur on a specific day and time.
 
     Columns:

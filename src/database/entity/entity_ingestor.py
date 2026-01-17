@@ -14,6 +14,7 @@ class EntityIngestor:
             "entity_id": UUID | str,     # canonical entity id
             "surface_form": str,         # base surface form
             "source_table": str,         # e.g. "teachers"
+            "source_column: str,         # e.g. "subject_name"
 
             # OPTIONAL:
             "embedding_text": str | list[str]
@@ -47,9 +48,10 @@ class EntityIngestor:
             entity_id,
             surface_form,
             source_table,
+            source_column,
             embedding
         )
-        VALUES (%s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s)
         """
 
         params = [
@@ -58,6 +60,7 @@ class EntityIngestor:
                 e["entity_id"],
                 e["embedding_text"],   # variant text
                 e["source_table"],
+                e["source_column"],
                 emb,
             )
             for e, emb in zip(expanded, embeddings)
