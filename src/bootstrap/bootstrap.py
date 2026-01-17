@@ -1,5 +1,6 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+from src.database.entity.entity_ingestor import EntityIngestor
 from src.database.entity.entity_retriever import EntityRetriever
 from src.database.entity.entity_store import EntityStore
 from src.database.guidance import guidance_store
@@ -32,6 +33,10 @@ def create_entity_store(conn):
 def create_entity_retriever(entity_store, embedder):
     print("loaded entity retriever")
     return EntityRetriever(entity_store=entity_store, embedder=embedder)
+
+def create_entity_ingestor(entity_store, embedder):
+    print("loaded entity ingestor")
+    return EntityIngestor(entity_store=entity_store, embedder=embedder)
 
 def create_vector_store(conn):
     print("loaded vector store")

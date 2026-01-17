@@ -1,7 +1,7 @@
 from src.models.user import User
 
 schema = [
-    {
+  {
         "name": "events",
         "type": "schema_guidance",
         "priority": 3,
