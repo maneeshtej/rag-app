@@ -3,15 +3,18 @@ from urllib import response
 from langchain_google_genai import ChatGoogleGenerativeAI
 from src.database.entity.entity_retriever import EntityRetriever
 from src.database.guidance.guidance_retriever import GuidanceRetriever
+from src.database.sql.sql_retriever import SQLRetriever
+from src.database.sql.sql_store import SQLStore
 from src.models.guidance import GuidanceIngest
 
 class NL2SQLEngine:
-    def __init__(self, llm, guidance_retriever, entity_retriever):
+    def __init__(self, llm, guidance_retriever, entity_retriever, sql_store):
         pass
         self.llm:ChatGoogleGenerativeAI = llm
         self.guidance_retriever:GuidanceRetriever = guidance_retriever
         self.entity_retriever:EntityRetriever = entity_retriever
-        self.version = "0.0.8"
+        self.sql_store:SQLStore = sql_store
+        self.version = "0.0.10"
         self.logs = {}
 
     def __get_guidance_rules(self, *, query:str, soft_k:int = 5, hard_k:int = 7) -> dict:
@@ -238,9 +241,11 @@ class NL2SQLEngine:
                     "surface_form": f.get("raw_value"),
                     "op": f.get("op"),
                 },
-                soft_k=3,
+                soft_k=1,
                 hard_k=3,
             )
+
+            f["entity_type"] = f.get("entity_type")
 
             # flatten resolved rows
             resolved_rows = []
@@ -248,6 +253,18 @@ class NL2SQLEngine:
                 resolved_rows.extend(r.get("resolved", []))
 
             f["resolved"] = resolved_rows
+
+
+            hydrated = []
+            for r in resolved_rows:
+                table = r["source_table"]
+                entity_id = r["entity_id"]
+
+                sql = f"SELECT * FROM {table} WHERE id=%s"
+                rows = self.sql_store.execute_read(sql=sql, params=(entity_id, ))
+
+                if rows:
+                    hydrated.append(rows[0])
 
             # ---------- confidence logic ----------
             if not resolved_rows:
@@ -275,6 +292,7 @@ class NL2SQLEngine:
             # Relative separation
             if len(sorted_rows) == 1:
                 f["confidence"] = "high"
+                f["continue"] = True
                 continue
 
             delta = sorted_rows[0]["similarity"] - sorted_rows[1]["similarity"]
@@ -284,7 +302,20 @@ class NL2SQLEngine:
             else:
                 f["confidence"] = "low"
 
+            f.pop("resolved", None)
+
+        resolved["continue"] = all(
+            f.get("confidence") == "high"
+            for f in resolved.get("filters", [])
+        )
+
         return resolved
+    
+    def resume(self, *, resolved_object:dict):
+        if not resolved_object.get("continue"):
+            return
+        
+
 
 
     def run(self, *, query:str, **options) -> dict:
@@ -297,9 +328,17 @@ class NL2SQLEngine:
         resolved_object = self._resolve_entities(query_planning_object=query_planning_object)
         self.logs['resolved_object'] = resolved_object
 
-        return {
-            "result": resolved_object,
-            "logs":self.logs
-        }
+        print(resolved_object)
+
+        if not resolved_object.get("continue", False):
+            print("Resolution needed stopping pipleine")
+
+            return {
+                "result": resolved_object,
+                "logs":self.logs
+            }
+        
+        return self.resume(resolved_object=resolved_object)
+    
 
        
