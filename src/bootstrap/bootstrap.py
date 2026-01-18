@@ -21,7 +21,7 @@ from src.database.guidance.guidance_store import GuidanceStore
 
 from src.pipelines.retrieval_pipeline import RetrievalPipeline
 from src.pipelines.scraping.scrape_ingestion_pipeline import ScrapeIngestionPipeline
-from src.pipelines.vector_ingestion import VectorIngestion
+from src.pipelines.vector.vector_ingestion import VectorIngestion
 from src.pipelines.answer_pipeline import AnswerPipeline
 from src.pipeline import MainPipeline
 

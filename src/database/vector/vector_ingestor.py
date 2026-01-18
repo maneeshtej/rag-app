@@ -13,9 +13,14 @@ class VectorIngestor:
         self.embedder = embedder
         self.conn = conn
 
-    def ingest_documents(self, docs: List[Document], type: str = "vector"):
+    def ingest_documents(self, docs: List[Document]) -> bool:
         if not docs:
-            return "no_docs"
+            return False
+
+        required = {"owner_id", "role", "access_level"}
+        for d in docs:
+            if not d.metadata or not required.issubset(d.metadata):
+                raise ValueError("Missing required metadata for ingestion")
 
         meta = docs[0].metadata
         file_id = uuid4()
@@ -31,23 +36,30 @@ class VectorIngestor:
         texts = [d.page_content for d in docs]
         embeddings = self.embedder.embed_documents(texts)
 
-        chunks = [
-            StoredChunk(
-                id=uuid4(),
-                file_id=file_id,
-                content=doc.page_content,
-                embedding=emb,
-                metadata=doc.metadata or {},
+        chunks = []
+        for doc, emb in zip(docs, embeddings):
+            clean_meta = {
+                k: v
+                for k, v in (doc.metadata or {}).items()
+                if k not in {"owner_id", "role", "access_level"}
+            }
+
+            chunks.append(
+                StoredChunk(
+                    id=uuid4(),
+                    file_id=file_id,
+                    content=doc.page_content,
+                    embedding=emb,
+                    metadata=clean_meta,
+                )
             )
-            for doc, emb in zip(docs, embeddings)
-        ]
 
         try:
             self.store.insert_file(stored_file)
-            self.store.insert_chunks(chunks, type=type)
+            self.store.insert_chunks(chunks)
             self.conn.commit()
         except Exception:
             self.conn.rollback()
             raise
 
-        return "success"
+        return True
