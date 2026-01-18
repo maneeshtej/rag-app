@@ -8,10 +8,9 @@ from src.models.document import StoredChunk, StoredFile
 
 
 class VectorIngestor:
-    def __init__(self, vector_store: VectorStore, embedder, conn):
+    def __init__(self, vector_store: VectorStore, embedder):
         self.store = vector_store
         self.embedder = embedder
-        self.conn = conn
 
     def ingest_documents(self, docs: List[Document]) -> bool:
         if not docs:
@@ -36,7 +35,8 @@ class VectorIngestor:
         texts = [d.page_content for d in docs]
         embeddings = self.embedder.embed_documents(texts)
 
-        chunks = []
+        chunks: list[StoredChunk] = []
+
         for doc, emb in zip(docs, embeddings):
             clean_meta = {
                 k: v
@@ -57,9 +57,9 @@ class VectorIngestor:
         try:
             self.store.insert_file(stored_file)
             self.store.insert_chunks(chunks)
-            self.conn.commit()
+            self.store.commit()
         except Exception:
-            self.conn.rollback()
+            self.store.rollback()
             raise
 
         return True

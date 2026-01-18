@@ -14,6 +14,13 @@ class VectorStore:
         self.conn = conn
     # ---------- FILES ----------
 
+    def commit(self):
+        self.conn.commit()
+
+    def rollback(self):
+        self.conn.rollback()
+
+
     def insert_file(self, file: StoredFile):
         query = """
         INSERT INTO files (id, owner_id, role, access_level, source)

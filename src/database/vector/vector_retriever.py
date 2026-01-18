@@ -1,5 +1,8 @@
+from src.database.vector.vector_store import VectorStore
+
+
 class VectorRetriever:
-    def __init__(self, vector_store, min_similarity):
+    def __init__(self, vector_store:VectorStore, min_similarity:int = 0.60):
         self.vector_store = vector_store
         self.min_similarity = min_similarity
 

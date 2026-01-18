@@ -5,7 +5,8 @@ from src.models.user import User
 def create_user(
         username: str,
         role: str,
-        access_level: int
+        access_level: int,
+        conn
 ):
     user_id = uuid.uuid4()
 
@@ -15,11 +16,11 @@ def create_user(
     RETURNING id, username, role, access_level;
     """
 
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(query, (str(user_id), username, role, access_level))
-            row = cur.fetchone()
-            conn.commit()
+
+    with conn.cursor() as cur:
+        cur.execute(query, (str(user_id), username, role, access_level))
+        row = cur.fetchone()
+        conn.commit()
 
     return User(
         id=row[0],
@@ -28,7 +29,7 @@ def create_user(
         access_level=row[3]
     )
 
-def user_login(username: str):
+def user_login(username: str, conn):
     
     
     query = """
@@ -36,18 +37,17 @@ def user_login(username: str):
     WHERE username = %s
     """
 
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(query, (username, ))
-            row = cur.fetchone()
-            conn.commit()
+    with conn.cursor() as cur:
+        cur.execute(query, (username, ))
+        row = cur.fetchone()
+        conn.commit()
 
-        if row == None:
-            return None
+    if row == None:
+        return None
         
-        return User(
+    return User(
         id=row[0],
         username=row[1],
         role=row[2],
         access_level=row[3]
-        )
+    )

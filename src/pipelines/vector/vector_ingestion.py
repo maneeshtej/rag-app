@@ -4,12 +4,12 @@ from src.models.user import User
 
 
 class VectorIngestion:
-    def __init__(self, *, splitter, ingestor):
+    def __init__(self, *, splitter, vector_ingestor):
         self.splitter = splitter
-        self.ingestor = ingestor
+        self.vector_ingestor = vector_ingestor
 
     def run(self, loader, user: User):
-        if not all([self.splitter, self.ingestor]):
+        if not all([self.splitter, self.vector_ingestor]):
             raise ValueError("VectorIngestion is not fully configured")
 
         docs: List[Document] = loader.load()
@@ -25,4 +25,4 @@ class VectorIngestion:
 
         chunks: List[Document] = self.splitter.split_documents(docs)
 
-        return self.ingestor.ingest_documents(chunks)
+        return self.vector_ingestor.ingest_documents(chunks)
