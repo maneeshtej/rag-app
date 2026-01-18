@@ -12,7 +12,7 @@ Trigger when:
 Primary focus:
 - subject
 
-Include columns:
+Include tables and columns:
 - subjects: ["subject_name", "subject_code"]
 - teachers: ["name", "email"]
     """,
@@ -50,6 +50,8 @@ teaching subjects
 teaching courses
 teaching papers
 
+list all the subjects handled by 
+list all the subjects taught by
         """
     }
     ,
@@ -378,7 +380,6 @@ academic offerings
 subject directory
 course directory
 subject overview
-
         """
 }
 ]

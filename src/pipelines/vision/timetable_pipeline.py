@@ -452,6 +452,7 @@ class TimetablePipeline:
         self.vision_llm = vision_llm    # vision Gemini
         self.conn = conn
         self.entity_ingestor:EntityIngestor = entity_ingestor
+        self.version = "0.0.1"
 
     def pass1_extract(self, text: str) -> dict:
         response = self.llm.invoke(text)
@@ -536,8 +537,6 @@ class TimetablePipeline:
           )
           subject_id =  cur.fetchone()[0]
 
-      subject_name_variants = self._text_variants(subject_name)
-
       
       self.entity_ingestor.ingest([{
           "entity_type": "subject",
@@ -545,7 +544,7 @@ class TimetablePipeline:
           "surface_form": subject_name,
           "source_table": "subjects",
           "source_column": "subject_name",
-          "embedding_text": subject_name_variants
+          "embedding_text": subject_name
         }])
       
       self.entity_ingestor.ingest([{
