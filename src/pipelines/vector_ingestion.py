@@ -15,12 +15,12 @@ class VectorIngestion:
         docs: List[Document] = loader.load()
 
         for doc in docs:
+            original_meta = doc.metadata or {}
             doc.metadata = {
-                **(doc.metadata or {}),
+                **original_meta,
                 "owner_id": str(user.id),
                 "role": user.role,
                 "access_level": user.access_level,
-                "source": doc.metadata.get("source"),
             }
 
         chunks: List[Document] = self.splitter.split_documents(docs)
