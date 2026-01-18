@@ -43,8 +43,8 @@ def build_app():
 
     vector_store = VectorStore(conn=conn)
     retriever = VectorRetriever(vector_store=vector_store)
-    vector_ingestor = VectorIngestor(embedder, vector_store)
-    vector_ingestion = VectorIngestion(splitter, vector_ingestor)
+    vector_ingestor = VectorIngestor(embedder=embedder, vector_store=vector_store)
+    vector_ingestion = VectorIngestion(splitter=splitter, vector_ingestor=vector_ingestor)
     vector_retrieval = VectorRetrieval(
         retriever=retriever,
         reranker=DeterministicReranker(),
@@ -54,7 +54,7 @@ def build_app():
     app = MainPipeline(
         vector_ingestion=vector_ingestion,
         vector_retrieval=vector_retrieval,
-        answer=AnswerGenerator(llm),
+        answer=AnswerGenerator(llm=llm),
     )
 
     return app, conn, get_loader
