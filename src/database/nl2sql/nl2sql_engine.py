@@ -219,19 +219,24 @@ class NL2SQLEngine:
             "entity": []
         }
 
+        print(f"\n\nSchema rules: \n\n")
         schema_rules: list[GuidanceIngest] = guidance_rules.get("schema_rules") or []
         for rule in schema_rules:
             guidance_results["schema"].append({
                 "name": rule.name,
                 "similarity": rule.similarity
             })
+            print(rule.name, rule.type, rule.similarity)
 
+        
+        print("\n\nGuidance rules: \n\n")
         entity_rules: list[GuidanceIngest] = guidance_rules.get("entity_rules") or []
         for rule in entity_rules:
             guidance_results["entity"].append({
                 "name": rule.name,
                 "similarity": rule.similarity
             })
+            print(rule.name, rule.type, rule.similarity)
 
         self.logs["rules"] = guidance_results
 
@@ -709,19 +714,6 @@ class NL2SQLEngine:
         print("\nNL2SQL pipeline end\n")
 
         return sql, params
-
-
-
-
-        if not resolved_object.get("continue", False):
-            print("Resolution needed stopping pipleine")
-
-            return {
-                "result": resolved_object,
-                "logs":self.logs
-            }
-        
-        return self.resume(resolved_object=resolved_object)
     
 
        

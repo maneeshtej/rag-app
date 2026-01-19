@@ -16,6 +16,26 @@ from flask import request
 UPLOAD_DIR = "/tmp/rag_uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+import json
+from pathlib import Path
+
+SESSION_FILE = Path("/tmp/rag_user.json")
+
+def save_user(user):
+    SESSION_FILE.write_text(json.dumps({
+        "id": str(user.id),
+        "username": user.username,
+        "role": user.role,
+        "access_level": user.access_level,
+    }))
+
+def load_user():
+    if not SESSION_FILE.exists():
+        return None
+    return json.loads(SESSION_FILE.read_text())
+
+
+
 @api.post("/ingest")
 def ingest():
     file = request.files.get("file")
@@ -45,27 +65,29 @@ def ingest():
             os.remove(path)
 
 
-
-
 @api.post("/query")
 def query():
     data = request.json
     question = data["query"]
 
-    # temp system user
-    system_user = User(
-        id=uuid4(),
-        username="system",
-        role="admin",
-        access_level=0,
+    user_data = load_user()
+    if not user_data:
+        return jsonify({"error": "not logged in"}), 401
+
+    user = User(
+        id=user_data["id"],
+        username=user_data["username"],
+        role=user_data["role"],
+        access_level=user_data["access_level"],
     )
 
     result = rag_app.vector_inference(
         query=question,
-        user=system_user,
+        user=user,
     )
 
     return jsonify(result)
+
 
 @api.post("/signup")
 def signup():
@@ -93,19 +115,21 @@ def signup():
         conn.rollback()
         return jsonify({"error": str(e)}), 400
     
+
+
 @api.post("/login")
 def login():
     data = request.json
     username = data.get("username")
-    password = data.get("password")  # unused for now
 
     if not username:
         return jsonify({"error": "username required"}), 400
 
     user = user_login(username=username, conn=conn)
-
     if not user:
         return jsonify({"error": "invalid user"}), 401
+
+    save_user(user)
 
     return jsonify({
         "id": str(user.id),
@@ -113,6 +137,7 @@ def login():
         "role": user.role,
         "access_level": user.access_level,
     })
+
 
 
 

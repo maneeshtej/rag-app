@@ -1,14 +1,17 @@
 # src/retrieval/vector_retrieval.py
 
+from langchain_huggingface import HuggingFaceEmbeddings
+from src.database.vector.vector_reranker import DeterministicReranker
+from src.database.vector.vector_retriever import VectorRetriever
 from src.models.user import User
 from src.models.retrieved_chunk import RetrievedChunk
 
 
 class VectorRetrieval:
     def __init__(self, *, retriever, reranker, embedder):
-        self.retriever = retriever
-        self.reranker = reranker
-        self.embedder = embedder
+        self.retriever:VectorRetriever = retriever
+        self.reranker:DeterministicReranker = reranker
+        self.embedder:HuggingFaceEmbeddings = embedder
 
     def __enhance_query(self, *, query: str) -> str:
         return query.strip().lower()

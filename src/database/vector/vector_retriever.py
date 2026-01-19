@@ -1,4 +1,6 @@
 from src.database.vector.vector_store import VectorStore
+from src.models.guidance import GuidanceIngest
+from src.models.user import User
 
 
 class VectorRetriever:
@@ -6,7 +8,7 @@ class VectorRetriever:
         self.vector_store = vector_store
         self.min_similarity = min_similarity
 
-    def retrieve(self, query_embedding, user, k=5):
+    def retrieve(self, query_embedding, user:User, k=5):
         if not query_embedding:
             raise ValueError("empty query embedding")
 
@@ -18,5 +20,11 @@ class VectorRetriever:
 
         if not chunks or chunks[0].similarity < self.min_similarity:
             return []
+        
+        actual_chunks:list[GuidanceIngest] = []
+        
+        for chunk in chunks:
+            if chunk.access_level <= user.access_level:
+                actual_chunks.append(chunk)
 
-        return [c for c in chunks if c.similarity >= self.min_similarity]
+        return [c for c in actual_chunks if c.similarity >= self.min_similarity]
