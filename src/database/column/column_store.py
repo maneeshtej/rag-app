@@ -32,14 +32,15 @@ class ColumnStore:
         """
 
         sql = """
-        SELECT
-            table_name,
-            column_name,
-            1 - (embedding <=> %s) AS similarity
-        FROM column_catalog
-        WHERE table_name = %s
-        ORDER BY embedding <=> %s
-        LIMIT %s
+            SELECT
+                table_name,
+                column_name,
+                1 - (embedding <=> %s::vector) AS similarity
+            FROM column_catalog
+            WHERE table_name = %s
+            ORDER BY embedding <=> %s::vector
+            LIMIT %s
+
         """
 
         with self.conn.cursor() as cur:

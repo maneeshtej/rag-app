@@ -6,7 +6,7 @@ from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from src.database.dependencies import create_embedder
-from src.database.llm import create_google_llm
+from src.database.llm import create_google_llm, create_groq_llm
 from src.database.vector.vector_ingestor import VectorIngestor
 from src.database.vector.vector_reranker import DeterministicReranker
 from src.database.vector.vector_retriever import VectorRetriever
@@ -33,7 +33,7 @@ def build_app():
         port=5432,
     )
 
-    llm = create_google_llm()
+    llm = create_groq_llm()
     embedder = create_embedder()
 
     splitter = RecursiveCharacterTextSplitter(

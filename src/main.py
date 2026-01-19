@@ -1,3 +1,4 @@
+
 from langchain_community.document_loaders import TextLoader, PyPDFLoader, Docx2txtLoader
 from langchain_core.messages import HumanMessage, AIMessage
 from src.database.db import get_connection
@@ -73,7 +74,7 @@ def main():
 
             print("Entering chat mode. Type `quit` or `exit` to leave.\n")
 
-            chat_history = []  # List[HumanMessage | AIMessage]
+            chat_history = [] 
 
             while True:
                 query = input("you> ").strip()
@@ -193,3 +194,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

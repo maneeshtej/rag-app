@@ -3,6 +3,8 @@
 from uuid import UUID, uuid4
 from typing import List
 from langchain_core.documents import Document
+from src.database.db import get_dev_connection
+from src.database.dependencies import create_embedder
 from src.database.vector.vector_store import VectorStore
 from src.models.document import StoredChunk, StoredFile
 
@@ -63,3 +65,41 @@ class VectorIngestor:
             raise
 
         return True
+
+# main.py
+
+from langchain_community.document_loaders import TextLoader, PyPDFLoader
+from src.database.vector.vector_store import VectorStore
+
+from uuid import uuid4
+
+def main():
+    # loader = TextLoader("data/sample.txt")
+    loader = PyPDFLoader("test_long.pdf")
+    conn = get_dev_connection()
+    
+    docs = loader.load()
+
+    # attach required metadata
+    for d in docs:
+        d.metadata.update({
+            "owner_id": str(uuid4()),
+            "role": "user",
+            "access_level": "private",
+            "source": "text_file"
+        })
+
+    vector_store = VectorStore(conn=conn)
+    embedder = create_embedder()
+
+    ingestor = VectorIngestor(vector_store=vector_store, embedder=embedder)
+    try:
+        result = ingestor.ingest_documents(docs=docs)
+        conn.commit()
+    except Exception as e:
+        raise e
+
+    print("Ingestion complete")
+
+if __name__ == "__main__":
+    main()

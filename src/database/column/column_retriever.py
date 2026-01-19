@@ -25,6 +25,8 @@ class ColumnRetriever:
 
         embedding = self.embedder.embed_query(semantic_column)
 
+        
+
         results = self.column_store.similarity_search(
             embedding=embedding,
             table_name=table_name,

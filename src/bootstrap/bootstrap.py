@@ -49,7 +49,7 @@ def create_vector_store(conn):
 
 def create_vector_retriever(vector_store, embedder):
     print("loaded vector retriever")
-    return VectorRetriever(vector_store=vector_store, embedder=embedder)
+    return VectorRetriever(vector_store=vector_store)
 
 
 def create_vector_ingestor(conn, vector_store):
@@ -140,7 +140,7 @@ def create_scrape_ingestion_pipeline(sql_ingestor, sql_retriever, vector_ingesto
         embedder=embedder
     )
 
-conn = create_connection()
+conn = create_dev_conn()
 llm = create_groq_llm()
 embedder = create_embedder()
 
