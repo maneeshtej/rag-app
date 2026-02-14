@@ -1,8 +1,6 @@
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
-
-
 class AnswerPipeline:
     def __init__(self, llm, history_size=3, prompt=None):
         self.llm = llm

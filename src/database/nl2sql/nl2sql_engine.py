@@ -1,22 +1,16 @@
 import json
 import re
 from langchain_google_genai import ChatGoogleGenerativeAI
-# # from src.bootstrap.bootstrap import create_entity_ingestor, create_entity_retriever, create_entity_store, create_guidance_ingestor, create_guidance_retriever, create_guidance_store, create_sql_store
 from src.database.column.column_retriever import ColumnRetriever
-# from src.database.column.column_store import ColumnStore
-# from src.database.db import get_dev_connection
-# from src.database.dependencies import create_embedder
 from src.database.entity.entity_retriever import EntityRetriever
 from src.database.guidance.guidance_retriever import GuidanceRetriever
-# from src.database.llm import create_google_llm, create_groq_llm
 from src.database.sql.sql_store import SQLStore
 from src.models.guidance import GuidanceIngest
 from src.schema.joins.joins import JOIN_GRAPH
 
 class NL2SQLEngine:
     def __init__(self, llm, guidance_retriever, entity_retriever, column_retriever, sql_store):
-        pass
-        self.llm:ChatGoogleGenerativeAI = llm
+        self.llm: ChatGoogleGenerativeAI = llm
         self.guidance_retriever:GuidanceRetriever = guidance_retriever
         self.entity_retriever:EntityRetriever = entity_retriever
         self.column_retriever:ColumnRetriever = column_retriever
@@ -722,41 +716,49 @@ class NL2SQLEngine:
         print("\nNL2SQL pipeline end\n")
 
         return sql, params
-    
 
-       
 
-# if __name__ == "__main__":
+if __name__ == "__main__":
+    from src.database.db import get_dev_connection
+    from src.database.dependencies import create_embedder
+    from src.database.llm import create_groq_llm
+    from src.bootstrap.bootstrap import (
+        create_entity_retriever,
+        create_entity_store,
+        create_guidance_retriever,
+        create_guidance_store,
+        create_sql_store,
+    )
+    from src.database.column.column_store import ColumnStore
 
-#     conn = get_dev_connection()
-#     embedder = create_embedder()
-#     llm = create_groq_llm()
-
-#     guidance_store = create_guidance_store(conn=conn)
-#     guidance_ingestor = create_guidance_ingestor(guidance_store=guidance_store, embedder=embedder)
-#     guidance_retriever = create_guidance_retriever(guidance_store=guidance_store, embedder=embedder)
-#     entity_store = create_entity_store(conn=conn)
-#     entity_ingestor = create_entity_ingestor(entity_store=entity_store, embedder=embedder)
-#     entity_retriever = create_entity_retriever(entity_store=entity_store, embedder=embedder)
-#     sql_store = create_sql_store(conn=conn)
-#     column_store = ColumnStore(conn=conn)
-#     column_retriever = ColumnRetriever(column_store=column_store, embedder=embedder)
-#     nl2sql = NL2SQLEngine(
-#         llm=llm, 
-#         guidance_retriever=guidance_retriever, 
-#         entity_retriever=entity_retriever, 
-#         sql_store=sql_store,
-#         column_retriever= column_retriever
-#     )
-
-#     while True:
-#         query = input("\n\nEnter your query:\n\n")
-#         if not query or query == "exit":
-#             break
-
-#         try:
-#             result = nl2sql.run(query=query)
-#             print(result)
-#         except Exception as e:
-#             conn.rollback()
-#             raise e
+    conn = get_dev_connection()
+    embedder = create_embedder()
+    llm = create_groq_llm()
+    guidance_store = create_guidance_store(conn=conn)
+    guidance_retriever = create_guidance_retriever(
+        guidance_store=guidance_store, embedder=embedder
+    )
+    entity_store = create_entity_store(conn=conn)
+    entity_retriever = create_entity_retriever(
+        entity_store=entity_store, embedder=embedder
+    )
+    sql_store = create_sql_store(conn=conn)
+    column_store = ColumnStore(conn=conn)
+    column_retriever = ColumnRetriever(column_store=column_store, embedder=embedder)
+    nl2sql = NL2SQLEngine(
+        llm=llm,
+        guidance_retriever=guidance_retriever,
+        entity_retriever=entity_retriever,
+        sql_store=sql_store,
+        column_retriever=column_retriever,
+    )
+    while True:
+        query = input("\n\nEnter your query:\n\n")
+        if not query or query == "exit":
+            break
+        try:
+            result = nl2sql.run(query=query)
+            print(result)
+        except Exception as e:
+            conn.rollback()
+            raise e
